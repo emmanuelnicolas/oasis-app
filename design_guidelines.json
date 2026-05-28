@@ -1,0 +1,127 @@
+{
+  "project_name": "Personalized Skincare App",
+  "theme": "light",
+  "archetype": "1 (Organic & Earthy)",
+  "language": "fr",
+  "design_philosophy": "Elegant, modern, calming, and premium. The interface should feel like a high-end French skincare brand. Prioritize warmth, personal connection, and aspirational wellness over clinical medical aesthetics. Generous spacing, soft organic shapes, and a soothing color palette.",
+  "colors": {
+    "background": {
+      "base": "#F7F5F0",
+      "surface": "#FCFBF9",
+      "overlay": "rgba(247, 245, 240, 0.8)"
+    },
+    "text": {
+      "primary": "#1F2E24",
+      "secondary": "#697A6D",
+      "disabled": "#A3ACA6",
+      "inverse": "#FFFFFF"
+    },
+    "brand": {
+      "primary": "#7E9A88",
+      "primary_hover": "#657E6D",
+      "secondary": "#C28D75",
+      "secondary_hover": "#A87A65"
+    },
+    "ui": {
+      "border": "#E6E2D8",
+      "divider": "#E6E2D8",
+      "success": "#7E9A88",
+      "error": "#B86B6B",
+      "warning": "#D4B271"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Cormorant Garamond, serif",
+      "body": "Manrope, sans-serif"
+    },
+    "scales": {
+      "h1": "text-4xl md:text-5xl font-light tracking-tight text-[#1F2E24]",
+      "h2": "text-2xl md:text-3xl font-medium tracking-tight text-[#1F2E24]",
+      "h3": "text-xl font-medium text-[#1F2E24]",
+      "body_large": "text-lg font-light text-[#697A6D] leading-relaxed",
+      "body": "text-base font-light text-[#697A6D] leading-relaxed",
+      "small": "text-sm font-medium text-[#697A6D] uppercase tracking-widest"
+    },
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Manrope:wght@300;400;500;600&display=swap"
+  },
+  "layout": {
+    "spacing": {
+      "container_padding": "p-6 md:p-8",
+      "section_gap": "gap-8 md:gap-12",
+      "element_gap": "gap-4"
+    },
+    "border_radius": {
+      "card": "rounded-3xl",
+      "button": "rounded-full",
+      "input": "rounded-2xl",
+      "image": "rounded-[2rem]"
+    },
+    "shadows": {
+      "soft": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+      "floating": "shadow-[0_20px_40px_rgb(0,0,0,0.06)]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#7E9A88] text-white hover:bg-[#657E6D] rounded-full px-8 py-4 text-base font-medium transition-all duration-300",
+      "secondary": "bg-transparent border border-[#7E9A88] text-[#7E9A88] hover:bg-[#7E9A88] hover:text-white rounded-full px-8 py-4 text-base font-medium transition-all duration-300",
+      "ghost": "text-[#697A6D] hover:text-[#1F2E24] hover:bg-[#E6E2D8]/50 rounded-full px-6 py-3 transition-all"
+    },
+    "cards": {
+      "default": "bg-[#FCFBF9] border border-[#E6E2D8] rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-transform hover:-translate-y-1",
+      "flat": "bg-[#F7F5F0] rounded-3xl p-6"
+    },
+    "inputs": {
+      "default": "bg-transparent border border-[#E6E2D8] rounded-2xl px-5 py-4 w-full text-[#1F2E24] placeholder:text-[#A3ACA6] focus:outline-none focus:border-[#7E9A88] focus:ring-1 focus:ring-[#7E9A88] transition-all"
+    },
+    "checkbox": {
+      "style": "w-6 h-6 rounded-full border-2 border-[#E6E2D8] text-[#7E9A88] focus:ring-[#7E9A88] transition-colors data-[state=checked]:bg-[#7E9A88] data-[state=checked]:border-[#7E9A88]"
+    }
+  },
+  "motion": {
+    "page_transition": "framer-motion with ease-[0.22,1,0.36,1] duration-500",
+    "stagger_children": "delay: 0.1 per item",
+    "hover": "transform transition-all duration-300 ease-out"
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "strokeWidth={1.5} text-[#1F2E24] or text-[#7E9A88] for active"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero_background",
+        "url": "https://images.unsplash.com/photo-1767884022378-7909a74a15ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwyfHx3b21hbiUyMGNsZWFyJTIwc2tpbiUyMHBvcnRyYWl0JTIwbmF0dXJhbCUyMGxpZ2h0fGVufDB8fHx8MTc3NzQ2ODg1Nnww&ixlib=rb-4.1.0&q=85",
+        "description": "Young woman with clear skin, eyes closed in golden hour light. Perfect for onboarding or profile hero."
+      },
+      {
+        "category": "texture_background",
+        "url": "https://images.pexels.com/photos/29041984/pexels-photo-29041984.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Dark sand/earthy texture. Use selectively for subtle background accents or dark mode overlays."
+      },
+      {
+        "category": "product_showcase",
+        "url": "https://images.unsplash.com/photo-1749599018738-b8fb6c4a83e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxtaW5pbWFsaXN0JTIwb3JnYW5pYyUyMHNraW5jYXJlfGVufDB8fHx8MTc3NzQ2ODg1Mnww&ixlib=rb-4.1.0&q=85",
+        "description": "Minimalist skincare products. Great for the 'Routine' cards or product recommendations."
+      },
+      {
+        "category": "wellness_lifestyle",
+        "url": "https://images.unsplash.com/photo-1755699192991-1f49f76a8f0d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwzfHxtaW5pbWFsaXN0JTIwb3JnYW5pYyUyMHNraW5jYXJlfGVufDB8fHx8MTc3NzQ2ODg1Mnww&ixlib=rb-4.1.0&q=85",
+        "description": "Arranged skincare products on a table. Good for weekly routine header."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Ensure all text is in French as requested (e.g., 'Routine du Matin', 'Analyse de Peau').",
+    "Use 'Cormorant Garamond' for all main headings (H1, H2) to give the app a luxury, high-end French cosmetic feel.",
+    "Use 'Manrope' for body text, inputs, and buttons. It offers great readability on mobile devices.",
+    "Implement the app layout prioritizing mobile-first web app structure (bottom navigation bar, full-height scrolling content).",
+    "For the daily routine checklist, use the custom rounded-full checkbox style provided. It should feel satisfying to check off items.",
+    "Avoid harsh shadows. Use the soft shadow definitions provided or rely on the subtle 1px #E6E2D8 border for separation.",
+    "Integrate Lucide React icons with a light strokeWidth (1.5) to maintain the delicate visual aesthetic.",
+    "Add 'data-testid' attributes to all interactive elements (buttons, inputs, routine steps).",
+    "Include seasonal skincare tips in the home dashboard (e.g., 'Conseil du jour : Le vent froid assèche la peau, n\\'oubliez pas votre sérum hydratant.').",
+    "Use the image URLs provided in the media section to populate onboarding, profile, and routine headers. Do not use generic placeholders."
+  ]
+}
