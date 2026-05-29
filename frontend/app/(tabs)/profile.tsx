@@ -26,7 +26,7 @@ export default function Profile() {
   const load = useCallback(async () => {
     try {
       const [p, t] = await Promise.all([
-        apiFetch(token, "/api/profile"),
+        apiFetch(token, "/profile"),
         apiFetch(token, "/api/tips/seasonal"),
       ]);
       setProfile(p);
