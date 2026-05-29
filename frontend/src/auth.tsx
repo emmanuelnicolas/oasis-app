@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 
-export const API = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:8000";
+export const API = process.env.EXPO_PUBLIC_BACKEND_URL || ""https://oasis-backend-ia5h.onrender.com/api";
 
 export type SkinUser = {
   user_id: string;
