@@ -74,7 +74,7 @@ export default function Onboarding() {
   const submit = async () => {
     setBusy(true);
     try {
-      await apiFetch(token, "/api/profile", {
+      await apiFetch(token, "/profile", {
         method: "POST",
         body: JSON.stringify({
           skin_type: skinType,
@@ -87,7 +87,7 @@ export default function Onboarding() {
         }),
       });
       // Generate routines
-      await apiFetch(token, "/api/routines/generate", { method: "POST" });
+      await apiFetch(token, "/routines/generate", { method: "POST" });
       await refreshUser();
       router.replace("/(tabs)/home");
     } catch (e: any) {

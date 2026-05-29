@@ -23,10 +23,10 @@ export default function Home() {
   const load = useCallback(async () => {
     try {
       const [r, t, s, st] = await Promise.all([
-        apiFetch(token, "/api/routines"),
-        apiFetch(token, "/api/tracking/today"),
-        apiFetch(token, "/api/tips/seasonal"),
-        apiFetch(token, "/api/tracking/stats"),
+        apiFetch(token, "/routines"),
+        apiFetch(token, "/tracking/today"),
+        apiFetch(token, "/tips/seasonal"),
+        apiFetch(token, "/tracking/stats"),
       ]);
       setRoutines(r || {});
       setTracking((t && t.completed) || {});
@@ -47,7 +47,7 @@ export default function Home() {
     const newVal = !tracking[key];
     setTracking((p) => ({ ...p, [key]: newVal }));
     try {
-      await apiFetch(token, "/api/tracking/toggle", {
+      await apiFetch(token, "/tracking/toggle", {
         method: "POST",
         body: JSON.stringify({ routine_type: rtype, step_order: order, completed: newVal }),
       });

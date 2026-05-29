@@ -61,7 +61,7 @@ export default function Products() {
 	try {
 		if (!token) return;
 
-		const items = await apiFetch(token, "/api/products");
+		const items = await apiFetch(token, "/products");
 		setHistory(items || []);
 	} 	finally {
 		setLoading(false);
@@ -119,7 +119,7 @@ export default function Products() {
     setAnalyzing(true);
     setUnreadable(null);
     try {
-      const result = await apiFetch(token, "/api/products/analyze", {
+      const result = await apiFetch(token, "/products/analyze", {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
@@ -144,7 +144,7 @@ export default function Products() {
 
   const removeItem = async (id: string) => {
     try {
-      await apiFetch(token, `/api/products/${id}`, { method: "DELETE" });
+      await apiFetch(token, `/products/${id}`, { method: "DELETE" });
       setHistory((p) => p.filter((x) => x.analysis_id !== id));
     } catch (e: any) {
       Alert.alert("Erreur", e.message);

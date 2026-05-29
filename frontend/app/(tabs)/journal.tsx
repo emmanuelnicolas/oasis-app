@@ -22,7 +22,7 @@ export default function Journal() {
 
   const load = useCallback(async () => {
     try {
-      const e = await apiFetch(token, "/api/journal");
+      const e = await apiFetch(token, "/journal");
       setEntries(e || []);
     } finally {
       setLoading(false);
@@ -58,7 +58,7 @@ export default function Journal() {
     if (!pickedImage) return;
     setSaving(true);
     try {
-      await apiFetch(token, "/api/journal", {
+      await apiFetch(token, "/journal", {
         method: "POST",
         body: JSON.stringify({ image_base64: pickedImage, note }),
       });
@@ -78,7 +78,7 @@ export default function Journal() {
     if (!pickedImage) return;
     setAnalyzing(true);
     try {
-      const result = await apiFetch(token, "/api/skin/analyze", {
+      const result = await apiFetch(token, "/skin/analyze", {
         method: "POST",
         body: JSON.stringify({ image_base64: pickedImage }),
       });
@@ -92,7 +92,7 @@ export default function Journal() {
 
   const removeEntry = async (id: string) => {
     try {
-      await apiFetch(token, `/api/journal/${id}`, { method: "DELETE" });
+      await apiFetch(token, `/journal/${id}`, { method: "DELETE" });
       setEntries((p) => p.filter((e) => e.entry_id !== id));
     } catch (e: any) {
       Alert.alert("Erreur", e.message);

@@ -25,7 +25,7 @@ export default function Routines() {
 	try {
 		if (!token) return;
 
-		const r = await apiFetch(token, "/api/routines");
+		const r = await apiFetch(token, "/routines");
 		setRoutines(r || {});
 	} 	finally {
 		setLoading(false);
@@ -42,7 +42,7 @@ export default function Routines() {
 
   setGenerating(true);
   try {
-    const r = await apiFetch(token, "/api/routines/generate", { method: "POST" });
+    const r = await apiFetch(token, "/routines/generate", { method: "POST" });
     setRoutines(r || {});
     Alert.alert("✨", "Nouvelles routines créées !");
   } catch (e: any) {

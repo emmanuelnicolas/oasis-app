@@ -27,7 +27,7 @@ export default function Profile() {
     try {
       const [p, t] = await Promise.all([
         apiFetch(token, "/profile"),
-        apiFetch(token, "/api/tips/seasonal"),
+        apiFetch(token, "/tips/seasonal"),
       ]);
       setProfile(p);
       setTips(t);
