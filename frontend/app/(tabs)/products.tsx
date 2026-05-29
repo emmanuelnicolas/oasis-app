@@ -13,10 +13,7 @@ import LiveCamera from "../../src/LiveCamera";
 import Compare from "../../src/Compare";
 
 type Ingredient = { name: string; role: string; flag: "green" | "orange" | "red"; note: string };
-const riskText =
-  typeof r === "string"
-    ? r
-    : r.description || r.type || "Risque identifié";
+
 type Decision = { label: string; color: "green" | "orange" | "red"; justification: string };
 type Alternative = { criterion: string; why: string };
 type Compatibility = { verdict: string; reasons: string[] };

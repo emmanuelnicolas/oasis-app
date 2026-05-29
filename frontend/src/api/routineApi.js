@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL || "https://oasis-backend-ia5h.onrender.com/api";
 
 export async function getRoutines(token) {
   const response = await fetch(`${API_BASE_URL}/routines`, {

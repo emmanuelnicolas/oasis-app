@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 
-export const API = process.env.EXPO_PUBLIC_BACKEND_URL || ""https://oasis-backend-ia5h.onrender.com/api";
+export const API = process.env.EXPO_PUBLIC_BACKEND_URL || "https://oasis-backend-ia5h.onrender.com/api";
 
 export type SkinUser = {
   user_id: string;
@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchMe = useCallback(async (t: string) => {
-    const res = await fetch(`${API}/api/auth/me`, {
+    const res = await fetch(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${t}` },
     });
     if (!res.ok) throw new Error("auth_failed");
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (m) {
             const sessionId = m[1];
             window.history.replaceState({}, "", window.location.pathname);
-            const res = await fetch(`${API}/api/auth/google/session`, {
+            const res = await fetch(`${API}/auth/google/session`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ session_id: sessionId }),
@@ -84,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchMe]);
 
   const signup = async (email: string, password: string, name: string) => {
-    const res = await fetch(`${API}/api/auth/signup`, {
+    const res = await fetch(`${API}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, name }),
@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API}/api/auth/login`, {
+    const res = await fetch(`${API}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogleSession = async (sessionId: string) => {
-    const res = await fetch(`${API}/api/auth/google/session`, {
+    const res = await fetch(`${API}/auth/google/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
@@ -124,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     if (token) {
-      await fetch(`${API}/api/auth/logout`, {
+      await fetch(`${API}/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {});
