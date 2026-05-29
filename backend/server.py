@@ -364,7 +364,7 @@ Réponds UNIQUEMENT avec ce JSON :
         )
 
         response = gemini_response.text
-
+        data = parse_json_from_text(response)
     except Exception:
         logger.exception("Routine generation error")
 
