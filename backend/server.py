@@ -1152,7 +1152,7 @@ Format exact :
 
     data["ingredient_analysis"] = ingredient_analysis
     if ingredient_analysis.get("ingredient_score") is not None:
-    data["score"] = ingredient_analysis["ingredient_score"]
+        data["score"] = ingredient_analysis["ingredient_score"]
 
     formula_positioning = analyze_formula_positioning(
         extracted_text.split(","),
