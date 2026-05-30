@@ -313,17 +313,30 @@ async def generate_routines(user=Depends(get_current_user)):
     season = get_current_season()
 
     prompt = f"""
-Crée trois routines skincare personnalisées (matin, soir, hebdomadaire).
+Tu es une experte skincare française. Tu dois créer une routine personnalisée, réaliste et sûre.
 
-Profil :
+Profil utilisateur :
 - Type de peau : {profile.get('skin_type')}
 - Âge : {profile.get('age_range')}
 - Préoccupations : {', '.join(profile.get('concerns', []))}
 - Sensibilité : {profile.get('sensitivity')}
 - Allergies : {profile.get('allergies') or 'aucune'}
+- Routine actuelle : {profile.get('current_routine') or 'aucune'}
+- Objectifs : {profile.get('goals') or 'améliorer la peau'}
 - Saison : {season}
 
-Réponds UNIQUEMENT avec ce JSON :
+Règles importantes :
+- Ne propose pas trop d'actifs forts.
+- Si peau sensible, évite parfum, alcool dénaturé, exfoliation agressive.
+- Si acné ou pores, privilégie niacinamide, BHA doux, hydratation légère.
+- Si peau sèche, privilégie céramides, glycérine, acide hyaluronique.
+- Routine matin : 4 étapes maximum.
+- Routine soir : 4 étapes maximum.
+- Routine hebdo : 2 étapes maximum.
+- Chaque étape doit expliquer quoi faire, fréquence, bénéfice.
+- Réponds uniquement en JSON valide, sans texte autour.
+
+Format exact :
 
 {{
   "matin": {{
@@ -342,12 +355,28 @@ Réponds UNIQUEMENT avec ce JSON :
   "soir": {{
     "title": "Routine du Soir",
     "description": "string",
-    "steps": []
+    "steps": [
+      {{
+        "order": 1,
+        "name": "string",
+        "product_type": "string",
+        "instructions": "string",
+        "benefits": "string"
+      }}
+    ]
   }},
   "hebdo": {{
-    "title": "Routine Hebdo",
+    "title": "Routine Hebdomadaire",
     "description": "string",
-    "steps": []
+    "steps": [
+      {{
+        "order": 1,
+        "name": "string",
+        "product_type": "string",
+        "instructions": "string",
+        "benefits": "string"
+      }}
+    ]
   }}
 }}
 """
