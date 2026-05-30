@@ -947,6 +947,8 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
     )
 
     prompt = f"""
+Tu es une experte skincare française spécialisée en analyse INCI.
+
 Profil utilisateur :
 {profile_text}
 
@@ -960,12 +962,25 @@ Image fournie :
 {"Oui" if payload.image_base64 else "Non"}
 
 Mission :
-- Si une image est fournie, lis la liste INCI visible sur l'image.
-- Si un texte ingrédients est fourni, utilise aussi ce texte.
-- Analyse ensuite le produit pour le profil utilisateur.
-- Si l'image ou le texte est illisible, mets "unreadable": true.
+1. Extraire ou nettoyer la liste INCI.
+2. Identifier les ingrédients utiles pour le profil.
+3. Identifier les ingrédients à surveiller.
+4. Évaluer la compatibilité avec la peau de l'utilisateur.
+5. Donner une décision claire et honnête.
+6. Ne sois pas alarmiste.
+7. Ne donne jamais de diagnostic médical.
 
-Réponds STRICTEMENT avec ce JSON, sans texte autour :
+Règles :
+- Si peau sensible : surveille parfum, huiles essentielles, alcool dénaturé, exfoliants forts.
+- Si acné/pores : surveille ingrédients comédogènes, huiles lourdes, occlusifs excessifs.
+- Si peau sèche : valorise glycérine, céramides, acide hyaluronique, panthénol, squalane.
+- Si taches/éclat : valorise niacinamide, vitamine C, acide azélaïque, SPF.
+- Si rides : valorise rétinol, peptides, antioxydants, hydratants.
+- Le score doit vraiment varier selon le profil.
+- Maximum 15 ingrédients analysés.
+- Réponds uniquement en JSON valide.
+
+Format exact :
 
 {{
   "unreadable": false,
@@ -981,7 +996,13 @@ Réponds STRICTEMENT avec ce JSON, sans texte autour :
       "note": "string"
     }}
   ],
-  "risks": [],
+  "risks": [
+    {{
+      "type": "string",
+      "severity": "faible|moyen|fort",
+      "description": "string"
+    }}
+  ],
   "compatibility": {{
     "verdict": "compatible|à surveiller|incompatible",
     "reasons": ["string"]
@@ -991,14 +1012,14 @@ Réponds STRICTEMENT avec ce JSON, sans texte autour :
     "color": "green|orange|red",
     "justification": "string"
   }},
-  "alternatives": []
+  "alternatives": [
+    {{
+      "criterion": "string",
+      "why": "string"
+    }}
+  ],
+  "disclaimer": "Analyse indicative, ne remplace pas un avis dermatologique."
 }}
-
-Contraintes :
-- Pas de texte hors JSON
-- product_category doit être une des valeurs indiquées
-- Maximum 12 ingrédients
-- Maximum 3 risques
 """
 
     response = None
@@ -1130,6 +1151,8 @@ Contraintes :
     )
 
     data["ingredient_analysis"] = ingredient_analysis
+    if ingredient_analysis.get("ingredient_score") is not None:
+    data["score"] = ingredient_analysis["ingredient_score"]
 
     formula_positioning = analyze_formula_positioning(
         extracted_text.split(","),
