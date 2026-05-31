@@ -72,10 +72,10 @@ export default function Home() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.hello}>{greeting},</Text>
-          <Text style={styles.name}>{user?.name || ""}</Text>
-        </View>
+  <View>
+    <Text style={styles.hello}>{greeting},</Text>
+    <Text style={styles.name}>{user?.name || ""}</Text>
+  </View>
         {user?.picture ? (
           <Image source={{ uri: user.picture }} style={styles.avatar} />
         ) : (
@@ -86,6 +86,15 @@ export default function Home() {
           </View>
         )}
       </View>
+	  <View style={styles.heroCard}>
+  <Text style={styles.heroTitle}>
+    Votre peau évolue chaque jour ✨
+  </Text>
+
+  <Text style={styles.heroText}>
+    OASIS analyse vos produits, suit votre routine et personnalise vos recommandations skincare.
+  </Text>
+</View>
 
       {stats && (
         <View style={styles.statsRow}>
@@ -119,15 +128,21 @@ export default function Home() {
           <Ionicons name="scan-outline" size={22} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.scanTitle}>Analyser un produit</Text>
-          <Text style={styles.scanDesc}>Photo INCI ou liste → décision adaptée à votre peau.</Text>
+          <Text style={styles.scanTitle}>Scanner un produit ✨</Text>
+          <Text style={styles.scanDesc}>Analyse IA des ingrédients selon votre profil peau.</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
       {focusRoutine ? (
         <View style={styles.routineCard} testID={`focus-routine-${focusType}`}>
-          <Text style={styles.routineTitle}>{focusRoutine.title}</Text>
+          <Text style={styles.routineMoment}>
+  Routine du {focusType}
+</Text>
+
+<Text style={styles.routineTitle}>
+  {focusRoutine.title}
+</Text>
           <Text style={styles.routineDesc}>{focusRoutine.description}</Text>
           {focusRoutine.steps.map((step) => {
             const key = `${focusType}_${step.order}`;
@@ -193,4 +208,31 @@ const styles = StyleSheet.create({
   stepInstructions: { fontSize: 13, color: colors.textSecondary, marginTop: 4, lineHeight: 18 },
   emptyCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   emptyText: { color: colors.textSecondary, textAlign: "center" },
+  heroCard: {
+  backgroundColor: "#111827",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: spacing.lg,
+},
+
+heroTitle: {
+  color: "#FFFFFF",
+  fontSize: 24,
+  fontWeight: "800",
+  marginBottom: 8,
+},
+
+heroText: {
+  color: "rgba(255,255,255,0.75)",
+  fontSize: 14,
+  lineHeight: 22,
+},
+routineMoment: {
+  fontSize: 12,
+  color: colors.primary,
+  letterSpacing: 2,
+  textTransform: "uppercase",
+  marginBottom: 6,
+  fontWeight: "600",
+},
 });
