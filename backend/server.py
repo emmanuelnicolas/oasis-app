@@ -1200,9 +1200,9 @@ Format exact :
     )
 
     data["formula_positioning"] = formula_positioning
-        conflict_analysis = analyze_ingredient_conflicts(ingredient_source)
+    conflict_analysis = analyze_ingredient_conflicts(ingredient_source)
 
-        data["conflict_analysis"] = conflict_analysis
+    data["conflict_analysis"] = conflict_analysis
 
     if conflict_analysis.get("conflict_penalty"):
     data["score"] = max(
