@@ -1319,7 +1319,42 @@ async def delete_product(analysis_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Analyse introuvable")
     return {"ok": True}
 
+class ProductFeedbackRequest(BaseModel):
+    analysis_id: str
+    useful: Optional[bool] = None
+    irritation: Optional[bool] = None
+    already_used: Optional[bool] = None
 
+
+@api_router.post("/products/feedback")
+async def product_feedback(
+    payload: ProductFeedbackRequest,
+    user=Depends(get_current_user)
+):
+    update_data = {}
+
+    if payload.useful is not None:
+        update_data["feedback.useful"] = payload.useful
+
+    if payload.irritation is not None:
+        update_data["feedback.irritation"] = payload.irritation
+
+    if payload.already_used is not None:
+        update_data["feedback.already_used"] = payload.already_used
+
+    await db.product_analyses.update_one(
+        {
+            "analysis_id": payload.analysis_id,
+            "user_id": user["user_id"]
+        },
+        {
+            "$set": update_data
+        }
+    )
+
+    return {
+        "success": True
+    }
 # ---------- Daily Tracking ----------
 @api_router.post("/tracking/toggle")
 async def toggle_step(payload: TrackingUpdate, user=Depends(get_current_user)):
