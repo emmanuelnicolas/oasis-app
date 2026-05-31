@@ -327,21 +327,58 @@ export default function Products() {
             </View>
 
             <ScrollView contentContainerStyle={[styles.viewer, { paddingBottom: insets.bottom + spacing.xxl }]}>
-              {/* Score + decision */}
-              <View style={styles.decisionCard}>
-                <View style={[styles.bigScore, { borderColor: flagColor(viewer.decision?.color || "green") }]}>
-                  <Text style={[styles.bigScoreNum, { color: flagColor(viewer.decision?.color || "green") }]}>
-                    {viewer.score}
-                  </Text>
-                  <Text style={styles.bigScoreLabel}>/ 100</Text>
-                </View>
-                <View style={[styles.decisionBadge, { backgroundColor: flagBg(viewer.decision?.color || "green") }]}>
-                  <Text style={[styles.decisionLabel, { color: flagColor(viewer.decision?.color || "green") }]}>
-                    {viewer.decision?.label || "—"}
-                  </Text>
-                </View>
-                <Text style={styles.decisionJustif}>{viewer.decision?.justification}</Text>
-              </View>
+              {/* Premium score + decision */}
+<View style={styles.premiumDecisionCard}>
+  <View style={styles.scoreHeader}>
+    <Text style={styles.scoreTitle}>Compatibilité avec votre peau</Text>
+    <Text style={styles.scoreSubtitle}>Analyse personnalisée OASIS</Text>
+  </View>
+
+  <View style={styles.scoreRow}>
+    <View
+      style={[
+        styles.premiumScoreCircle,
+        {
+          borderColor: flagColor(viewer.decision?.color || "green"),
+          shadowColor: flagColor(viewer.decision?.color || "green"),
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.scoreNumber,
+          { color: flagColor(viewer.decision?.color || "green") },
+        ]}
+      >
+        {viewer.score}
+      </Text>
+      <Text style={styles.scoreOutOf}>/100</Text>
+    </View>
+
+    <View style={styles.scoreTextBlock}>
+      <View
+        style={[
+          styles.premiumBadge,
+          { backgroundColor: flagBg(viewer.decision?.color || "green") },
+        ]}
+      >
+        <Text
+          style={[
+            styles.premiumBadgeText,
+            { color: flagColor(viewer.decision?.color || "green") },
+          ]}
+        >
+          {viewer.decision?.label || "Analyse"}
+        </Text>
+      </View>
+
+      <Text style={styles.scoreExplanation}>
+        {viewer.decision?.justification ||
+          "Ce score est calculé selon votre profil peau, les ingrédients détectés et les risques potentiels."}
+      </Text>
+    </View>
+  </View>
+</View>
 
               {/* Compatibility */}
               {viewer.compatibility && (
@@ -594,4 +631,85 @@ const styles = StyleSheet.create({
   altCard: { backgroundColor: colors.surface, borderRadius: radius.input, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.sm },
   altName: { color: colors.primary, fontSize: 14, fontWeight: "600" },
   altWhy: { color: colors.textSecondary, fontSize: 13, marginTop: 3, lineHeight: 18 },
+  premiumDecisionCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.08,
+  shadowRadius: 20,
+  elevation: 4,
+},
+
+scoreHeader: {
+  marginBottom: 18,
+},
+
+scoreTitle: {
+  fontSize: 20,
+  fontWeight: "800",
+  color: "#111827",
+},
+
+scoreSubtitle: {
+  marginTop: 4,
+  fontSize: 13,
+  color: "#6B7280",
+},
+
+scoreRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 18,
+},
+
+premiumScoreCircle: {
+  width: 112,
+  height: 112,
+  borderRadius: 56,
+  borderWidth: 8,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#FAFAFA",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.22,
+  shadowRadius: 14,
+  elevation: 5,
+},
+
+scoreNumber: {
+  fontSize: 34,
+  fontWeight: "900",
+},
+
+scoreOutOf: {
+  fontSize: 13,
+  color: "#6B7280",
+  fontWeight: "700",
+},
+
+scoreTextBlock: {
+  flex: 1,
+},
+
+premiumBadge: {
+  alignSelf: "flex-start",
+  paddingHorizontal: 12,
+  paddingVertical: 7,
+  borderRadius: 999,
+  marginBottom: 10,
+},
+
+premiumBadgeText: {
+  fontSize: 13,
+  fontWeight: "800",
+},
+
+scoreExplanation: {
+  fontSize: 14,
+  lineHeight: 21,
+  color: "#374151",
+},
 });
