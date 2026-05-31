@@ -394,7 +394,79 @@ export default function Products() {
                   ))}
                 </View>
               )}
+<View style={styles.section}>
+  <Text style={styles.sectionLabel}>Votre retour</Text>
 
+  <Text style={styles.bulletText}>Cette analyse vous semble utile ?</Text>
+
+  <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+    <TouchableOpacity
+      style={styles.primaryBtn}
+      onPress={() =>
+        apiFetch(token, "/products/feedback", {
+          method: "POST",
+          body: JSON.stringify({
+            analysis_id: viewer.analysis_id,
+            useful: true,
+          }),
+        }).then(() => Alert.alert("Merci", "Votre retour est enregistré."))
+      }
+    >
+      <Text style={styles.primaryBtnText}>Oui 👍</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={styles.primaryBtn}
+      onPress={() =>
+        apiFetch(token, "/products/feedback", {
+          method: "POST",
+          body: JSON.stringify({
+            analysis_id: viewer.analysis_id,
+            useful: false,
+          }),
+        }).then(() => Alert.alert("Merci", "Votre retour est enregistré."))
+      }
+    >
+      <Text style={styles.primaryBtnText}>Non 👎</Text>
+    </TouchableOpacity>
+  </View>
+
+  <Text style={[styles.bulletText, { marginTop: 16 }]}>
+    Ce produit vous a déjà irrité ?
+  </Text>
+
+  <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+    <TouchableOpacity
+      style={styles.primaryBtn}
+      onPress={() =>
+        apiFetch(token, "/products/feedback", {
+          method: "POST",
+          body: JSON.stringify({
+            analysis_id: viewer.analysis_id,
+            irritation: true,
+          }),
+        }).then(() => Alert.alert("Merci", "Information enregistrée."))
+      }
+    >
+      <Text style={styles.primaryBtnText}>Oui</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={styles.primaryBtn}
+      onPress={() =>
+        apiFetch(token, "/products/feedback", {
+          method: "POST",
+          body: JSON.stringify({
+            analysis_id: viewer.analysis_id,
+            irritation: false,
+          }),
+        }).then(() => Alert.alert("Merci", "Information enregistrée."))
+      }
+    >
+      <Text style={styles.primaryBtnText}>Non</Text>
+    </TouchableOpacity>
+  </View>
+</View>
               {/* Alternatives */}
               {viewer.alternatives && viewer.alternatives.length > 0 && (
                 <View style={styles.section}>
