@@ -104,13 +104,21 @@ export default function Onboarding() {
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
         <Text style={styles.stepCount}>Étape {step + 1} sur {totalSteps}</Text>
+		<Text style={styles.aiTagline}>
+  Analyse skincare intelligente et personnalisée
+</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 0 && (
           <View>
-            <Text style={styles.title}>Quel est votre type de peau ?</Text>
-            <Text style={styles.subtitle}>Choisissez celui qui vous correspond le mieux.</Text>
+            <Text style={styles.title}>
+  Commençons votre analyse peau ✨
+</Text>
+
+<Text style={styles.subtitle}>
+  OASIS va personnaliser vos analyses, routines et recommandations selon votre peau.
+</Text>
             {SKIN_TYPES.map((t) => (
               <TouchableOpacity
                 key={t.id}
@@ -146,7 +154,9 @@ export default function Onboarding() {
 
         {step === 2 && (
           <View>
-            <Text style={styles.title}>Vos préoccupations</Text>
+            <Text style={styles.title}>
+  Qu’aimeriez-vous améliorer ?
+</Text>
             <Text style={styles.subtitle}>Sélectionnez tout ce qui vous concerne (multiple).</Text>
             {CONCERNS.map((c) => {
               const active = concerns.includes(c.id);
@@ -294,4 +304,10 @@ const styles = StyleSheet.create({
   secondaryBtn: { paddingHorizontal: spacing.lg, paddingVertical: 16, borderRadius: radius.button, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   secondaryBtnText: { color: colors.textPrimary, fontSize: 15 },
   btnDisabled: { opacity: 0.5 },
+  aiTagline: {
+  marginTop: 6,
+  fontSize: 13,
+  color: colors.primary,
+  fontWeight: "500",
+},
 });
