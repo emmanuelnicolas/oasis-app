@@ -1205,10 +1205,10 @@ Format exact :
     data["conflict_analysis"] = conflict_analysis
 
     if conflict_analysis.get("conflict_penalty"):
-    data["score"] = max(
-        0,
-        data.get("score", 50) - conflict_analysis["conflict_penalty"]
-    )
+        data["score"] = max(
+            0,
+            data.get("score", 50) - conflict_analysis["conflict_penalty"]
+        )
 
     analyzed_category = str(data.get("product_category", "")).lower().strip()
 
