@@ -308,7 +308,14 @@ export default function Products() {
                 onPress={runAnalysis}
                 disabled={analyzing}
               >
-                {analyzing ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Analyser ✦</Text>}
+                {analyzing ? (
+  <View style={styles.loadingInsideBtn}>
+    <ActivityIndicator color="#fff" />
+    <Text style={styles.loadingBtnText}>Analyse IA...</Text>
+  </View>
+) : (
+  <Text style={styles.primaryBtnText}>Analyser ✦</Text>
+)}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -420,7 +427,16 @@ export default function Products() {
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>Ingrédients</Text>
                   {viewer.ingredients.map((ing, i) => (
-                    <View key={i} style={styles.ingRow} testID={`ing-${i}`}>
+                    <View
+  key={i}
+  testID={`ing-${i}`}
+  style={[
+    styles.premiumIngredientCard,
+    {
+      borderLeftColor: flagColor(ing.flag),
+    },
+  ]}
+>
                       <View style={[styles.ingDot, { backgroundColor: flagColor(ing.flag) }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.ingName}>{ing.name}</Text>
@@ -711,5 +727,32 @@ scoreExplanation: {
   fontSize: 14,
   lineHeight: 21,
   color: "#374151",
+},
+loadingInsideBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+},
+
+loadingBtnText: {
+  color: "#fff",
+  fontWeight: "600",
+  fontSize: 15,
+},
+premiumIngredientCard: {
+  flexDirection: "row",
+  gap: spacing.md,
+  alignItems: "flex-start",
+  padding: spacing.md,
+  borderRadius: 18,
+  backgroundColor: "#FFFFFF",
+  marginBottom: 10,
+  borderLeftWidth: 5,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 10,
+  elevation: 2,
 },
 });
