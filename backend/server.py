@@ -820,7 +820,47 @@ def analyze_formula_positioning(
             "ingredient_integrity_score": integrity_score,
             "marketing_flags": []
         }
+def analyze_ingredient_conflicts(ingredient_names: List[str]) -> Dict[str, Any]:
+    names = [normalize_ingredient_name(x) for x in ingredient_names]
 
+    conflicts = []
+    score_penalty = 0
+
+    has_retinoid = any(x in names for x in ["RETINOL", "RETINAL"])
+    has_aha = any(x in names for x in ["GLYCOLIC ACID", "LACTIC ACID"])
+    has_bha = "SALICYLIC ACID" in names
+    has_vitamin_c = "ASCORBIC ACID" in names
+    has_fragrance = any(x in names for x in ["PARFUM", "FRAGRANCE"])
+    has_alcohol = any(x in names for x in ["ALCOHOL DENAT", "ALCOHOL DENAT."])
+
+    if has_retinoid and (has_aha or has_bha):
+        score_penalty += 15
+        conflicts.append({
+            "type": "irritation",
+            "severity": "fort",
+            "message": "Rétinol + acides exfoliants : risque d'irritation."
+        })
+
+    if has_vitamin_c and (has_aha or has_bha):
+        score_penalty += 8
+        conflicts.append({
+            "type": "sensibilisation",
+            "severity": "moyen",
+            "message": "Vitamine C + exfoliants : peut sensibiliser certaines peaux."
+        })
+
+    if has_fragrance and has_alcohol:
+        score_penalty += 10
+        conflicts.append({
+            "type": "peau sensible",
+            "severity": "moyen",
+            "message": "Parfum + alcool dénaturé : moins adapté aux peaux sensibles."
+        })
+
+    return {
+        "conflicts": conflicts,
+        "conflict_penalty": score_penalty
+    }
     one_percent_marker = ingredient_names[one_percent_index].strip()
 
     for index, raw_name in enumerate(ingredient_names):
@@ -1160,6 +1200,15 @@ Format exact :
     )
 
     data["formula_positioning"] = formula_positioning
+        conflict_analysis = analyze_ingredient_conflicts(ingredient_source)
+
+        data["conflict_analysis"] = conflict_analysis
+
+    if conflict_analysis.get("conflict_penalty"):
+    data["score"] = max(
+        0,
+        data.get("score", 50) - conflict_analysis["conflict_penalty"]
+    )
 
     analyzed_category = str(data.get("product_category", "")).lower().strip()
 
@@ -1204,6 +1253,7 @@ Format exact :
         "alternatives": data.get("alternatives", []),
         "ingredient_analysis": data.get("ingredient_analysis"),
         "formula_positioning": data.get("formula_positioning"),
+        "conflict_analysis": data.get("conflict_analysis"),
         "recommended_products": data.get("recommended_products", []),
         "created_at": now_utc(),
         "created_at_day": now_utc().date().isoformat(),
