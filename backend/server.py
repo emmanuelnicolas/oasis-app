@@ -820,6 +820,61 @@ def analyze_formula_positioning(
             "ingredient_integrity_score": integrity_score,
             "marketing_flags": []
         }
+
+    one_percent_marker = ingredient_names[one_percent_index].strip()
+
+    for index, raw_name in enumerate(ingredient_names):
+        normalized = normalize_ingredient_name(raw_name)
+        ing = ingredients_map.get(normalized)
+
+        if not ing:
+            continue
+
+        dose_sensitivity = ing.get("dose_sensitivity", "medium")
+        effective_at_low_dose = ing.get("effective_at_low_dose", False)
+        benefits = ing.get("official_benefits", [])
+
+        if not benefits:
+            continue
+
+        if index > one_percent_index:
+            if dose_sensitivity == "high" and not effective_at_low_dose:
+                integrity_score -= 15
+                marketing_flags.append({
+                    "ingredient": ing.get("inci_name", raw_name),
+                    "position": index + 1,
+                    "severity": "high",
+                    "type": "low_position_active",
+                    "message": f"{ing.get('inci_name', raw_name)} apparaît après un marqueur proche de 1%, sa concentration est probablement faible."
+                })
+
+            elif dose_sensitivity == "medium" and not effective_at_low_dose:
+                integrity_score -= 8
+                marketing_flags.append({
+                    "ingredient": ing.get("inci_name", raw_name),
+                    "position": index + 1,
+                    "severity": "medium",
+                    "type": "possible_low_concentration",
+                    "message": f"{ing.get('inci_name', raw_name)} apparaît assez bas dans la liste INCI."
+                })
+
+            elif dose_sensitivity == "low" or effective_at_low_dose:
+                marketing_flags.append({
+                    "ingredient": ing.get("inci_name", raw_name),
+                    "position": index + 1,
+                    "severity": "low",
+                    "type": "low_dose_but_potentially_effective",
+                    "message": f"{ing.get('inci_name', raw_name)} apparaît bas, mais peut rester pertinent à faible dose."
+                })
+
+    return {
+        "one_percent_line_index": one_percent_index + 1,
+        "one_percent_marker": one_percent_marker,
+        "ingredient_integrity_score": max(0, min(integrity_score, 100)),
+        "marketing_flags": marketing_flags[:8]
+    }
+
+
 def analyze_ingredient_conflicts(ingredient_names: List[str]) -> Dict[str, Any]:
     names = [normalize_ingredient_name(x) for x in ingredient_names]
 
@@ -860,58 +915,6 @@ def analyze_ingredient_conflicts(ingredient_names: List[str]) -> Dict[str, Any]:
     return {
         "conflicts": conflicts,
         "conflict_penalty": score_penalty
-    }
-    one_percent_marker = ingredient_names[one_percent_index].strip()
-
-    for index, raw_name in enumerate(ingredient_names):
-        normalized = normalize_ingredient_name(raw_name)
-        ing = ingredients_map.get(normalized)
-
-        if not ing:
-            continue
-
-        dose_sensitivity = ing.get("dose_sensitivity", "medium")
-        effective_at_low_dose = ing.get("effective_at_low_dose", False)
-        benefits = ing.get("official_benefits", [])
-
-        if not benefits:
-            continue
-
-        if index > one_percent_index:
-            if dose_sensitivity == "high" and not effective_at_low_dose:
-                integrity_score -= 15
-                marketing_flags.append({
-                    "ingredient": ing.get("inci_name", raw_name),
-                    "position": index + 1,
-                    "severity": "high",
-                    "type": "low_position_active",
-                    "message": f"{ing.get('inci_name', raw_name)} apparaît après un marqueur proche de 1%, sa concentration est probablement faible pour un ingrédient qui dépend beaucoup du dosage."
-                })
-
-            elif dose_sensitivity == "medium" and not effective_at_low_dose:
-                integrity_score -= 8
-                marketing_flags.append({
-                    "ingredient": ing.get("inci_name", raw_name),
-                    "position": index + 1,
-                    "severity": "medium",
-                    "type": "possible_low_concentration",
-                    "message": f"{ing.get('inci_name', raw_name)} apparaît assez bas dans la liste INCI. Il peut être présent à concentration limitée."
-                })
-
-            elif dose_sensitivity == "low" or effective_at_low_dose:
-                marketing_flags.append({
-                    "ingredient": ing.get("inci_name", raw_name),
-                    "position": index + 1,
-                    "severity": "low",
-                    "type": "low_dose_but_potentially_effective",
-                    "message": f"{ing.get('inci_name', raw_name)} apparaît bas dans la liste, mais cet actif peut rester pertinent à faible dose."
-                })
-
-    return {
-        "one_percent_line_index": one_percent_index + 1,
-        "one_percent_marker": one_percent_marker,
-        "ingredient_integrity_score": max(0, min(integrity_score, 100)),
-        "marketing_flags": marketing_flags[:8]
     }
 def normalize_inci_text(text: str) -> str:
     text = str(text or "").upper()
