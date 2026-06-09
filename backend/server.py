@@ -1022,6 +1022,10 @@ Règles :
 - Le score doit vraiment varier selon le profil.
 - Maximum 15 ingrédients analysés.
 - Réponds uniquement en JSON valide.
+- Le champ score_explanation doit expliquer le score de manière claire et rassurante.
+- Le champ barrier_risk doit être personnalisé selon le profil utilisateur, surtout la sensibilité, sécheresse, acné, rougeurs ou exfoliants.
+- Barrier risk = risque que la formule fragilise ou irrite la barrière cutanée selon le profil.
+- Le champ profile_match doit expliquer pourquoi le produit correspond ou non au profil peau.
 
 Format exact :
 
@@ -1031,6 +1035,35 @@ Format exact :
   "product_category": "moisturizer|serum|cleanser|spf|eye_care|mask|exfoliant|skincare",
   "score": 0,
   "extracted_ingredients_text": "string",
+
+  "score_explanation": {{
+    "summary": "Explique en 1 phrase pourquoi ce score est donné selon le profil utilisateur.",
+    "positives": [
+      "Point positif concret lié aux ingrédients et au profil utilisateur"
+    ],
+    "warnings": [
+      "Point de vigilance concret lié aux ingrédients et au profil utilisateur"
+    ]
+  }},
+
+  "barrier_risk": {{
+    "level": "faible|moyen|élevé",
+    "reasons": [
+      "Explique pourquoi ce produit peut ou non fragiliser la barrière cutanée selon le profil utilisateur"
+    ],
+    "advice": "Conseil d'utilisation simple selon le niveau de risque"
+  }},
+
+  "profile_match": {{
+    "skin_type_match": "Explique si le produit correspond au type de peau de l'utilisateur",
+    "concerns_match": [
+      "Explique les préoccupations du profil que le produit peut aider"
+    ],
+    "avoid_reasons": [
+      "Explique les raisons éventuelles d'éviter ou limiter ce produit"
+    ]
+  }},
+
   "ingredients": [
     {{
       "name": "string",
@@ -1039,6 +1072,7 @@ Format exact :
       "note": "string"
     }}
   ],
+
   "risks": [
     {{
       "type": "string",
@@ -1046,24 +1080,27 @@ Format exact :
       "description": "string"
     }}
   ],
+
   "compatibility": {{
     "verdict": "compatible|à surveiller|incompatible",
     "reasons": ["string"]
   }},
+
   "decision": {{
     "label": "À utiliser|Avec précaution|À éviter",
     "color": "green|orange|red",
     "justification": "string"
   }},
+
   "alternatives": [
     {{
       "criterion": "string",
       "why": "string"
     }}
   ],
+
   "disclaimer": "Analyse indicative, ne remplace pas un avis dermatologique."
 }}
-"""
 
     response = None
 
@@ -1254,6 +1291,9 @@ Format exact :
         "compatibility": data.get("compatibility"),
         "decision": data.get("decision"),
         "alternatives": data.get("alternatives", []),
+        "score_explanation": data.get("score_explanation"),
+        "barrier_risk": data.get("barrier_risk"),
+        "profile_match": data.get("profile_match"),
         "ingredient_analysis": data.get("ingredient_analysis"),
         "formula_positioning": data.get("formula_positioning"),
         "conflict_analysis": data.get("conflict_analysis"),
