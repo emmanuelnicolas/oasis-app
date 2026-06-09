@@ -9,7 +9,6 @@ import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth, apiFetch } from "../../src/auth";
 import { colors, fonts, radius, spacing } from "../../src/theme";
-import LiveCamera from "../../src/LiveCamera";
 import Compare from "../../src/Compare";
 
 type Ingredient = { name: string; role: string; flag: "green" | "orange" | "red"; note: string };
@@ -17,6 +16,24 @@ type Ingredient = { name: string; role: string; flag: "green" | "orange" | "red"
 type Decision = { label: string; color: "green" | "orange" | "red"; justification: string };
 type Alternative = { criterion: string; why: string };
 type Compatibility = { verdict: string; reasons: string[] };
+
+type ScoreExplanation = {
+  positives: string[];
+  warnings: string[];
+  summary: string;
+};
+
+type BarrierRisk = {
+  level: "faible" | "moyen" | "élevé";
+  reasons: string[];
+  advice: string;
+};
+
+type ProfileMatch = {
+  skin_type_match: string;
+  concerns_match: string[];
+  avoid_reasons: string[];
+};
 
 type Analysis = {
   analysis_id: string;
@@ -28,6 +45,9 @@ type Analysis = {
   compatibility: Compatibility;
   decision: Decision;
   alternatives: Alternative[];
+  score_explanation?: ScoreExplanation;
+  barrier_risk?: BarrierRisk;
+  profile_match?: ProfileMatch;
   disclaimer?: string;
   created_at: string;
 };
@@ -54,7 +74,6 @@ export default function Products() {
   const [image, setImage] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [unreadable, setUnreadable] = useState<string | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -99,17 +118,38 @@ export default function Products() {
     }
   };
 
-  const openCamera = () => {
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert("La caméra live est disponible sur mobile. Utilisez la galerie sur le web.");
-      } else {
-        Alert.alert("Caméra", "La caméra live est disponible sur mobile. Utilisez la galerie sur le web.");
-      }
+  const openCamera = async () => {
+  if (Platform.OS === "web") {
+    Alert.alert("Caméra", "La caméra est disponible sur mobile. Utilisez la galerie sur le web.");
+    return;
+  }
+
+  try {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!perm.granted) {
+      Alert.alert(
+        "Caméra inaccessible",
+        "Autorisez l'accès à la caméra dans les réglages ou utilisez la galerie."
+      );
       return;
     }
-    setCameraOpen(true);
-  };
+
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.6,
+      allowsEditing: false,
+    });
+
+    if (!res.canceled && res.assets?.[0]?.base64) {
+      setImage(res.assets[0].base64);
+      setUnreadable(null);
+    }
+  } catch (error: any) {
+    Alert.alert("Erreur caméra", error?.message || "Impossible d’ouvrir la caméra.");
+  }
+};
 
   const runAnalysis = async () => {
     if (!image && !inci.trim()) {
@@ -267,10 +307,14 @@ export default function Products() {
                 </View>
               ) : (
                 <View style={styles.photoRow}>
-                  <TouchableOpacity testID="open-camera-btn" style={styles.photoBtnHalf} onPress={openCamera}>
-                    <Ionicons name="camera-outline" size={20} color={colors.primary} />
-                    <Text style={styles.photoBtnText}>Caméra</Text>
-                  </TouchableOpacity>
+                  <TouchableOpacity
+					testID="open-camera-btn"
+					style={styles.photoBtnHalf}
+					onPress={openCamera}
+				>
+					<Ionicons name="camera-outline" size={20} color={colors.primary} />
+					<Text style={styles.photoBtnText}>Caméra</Text>
+				</TouchableOpacity>
                   <TouchableOpacity testID="pick-photo-btn" style={styles.photoBtnHalf} onPress={pickPhoto}>
                     <Ionicons name="images-outline" size={20} color={colors.primary} />
                     <Text style={styles.photoBtnText}>Galerie</Text>
@@ -386,7 +430,83 @@ export default function Products() {
     </View>
   </View>
 </View>
+{viewer.score_explanation && (
+  <View style={styles.section}>
+    <Text style={styles.sectionLabel}>Pourquoi ce score ?</Text>
 
+    {!!viewer.score_explanation.summary && (
+      <Text style={styles.scoreExplanationText}>
+        {viewer.score_explanation.summary}
+      </Text>
+    )}
+
+    {(viewer.score_explanation.positives || []).map((p, i) => (
+      <View key={`positive-${i}`} style={styles.bullet}>
+        <Text style={styles.positiveDot}>✓</Text>
+        <Text style={styles.bulletText}>{p}</Text>
+      </View>
+    ))}
+
+    {(viewer.score_explanation.warnings || []).map((w, i) => (
+      <View key={`warning-${i}`} style={styles.bullet}>
+        <Text style={styles.warningDot}>⚠</Text>
+        <Text style={styles.bulletText}>{w}</Text>
+      </View>
+    ))}
+  </View>
+)}
+
+{viewer.barrier_risk && (
+  <View style={styles.section}>
+    <Text style={styles.sectionLabel}>Barrier Risk</Text>
+
+    <View style={styles.barrierCard}>
+      <Text style={styles.barrierLevel}>
+        Risque {viewer.barrier_risk.level}
+      </Text>
+
+      {(viewer.barrier_risk.reasons || []).map((r, i) => (
+        <View key={`barrier-${i}`} style={styles.bullet}>
+          <Text style={styles.bulletDot}>•</Text>
+          <Text style={styles.bulletText}>{r}</Text>
+        </View>
+      ))}
+
+      {!!viewer.barrier_risk.advice && (
+        <Text style={styles.barrierAdvice}>
+          Conseil : {viewer.barrier_risk.advice}
+        </Text>
+      )}
+    </View>
+  </View>
+)}
+{viewer.profile_match && (
+  <View style={styles.section}>
+    <Text style={styles.sectionLabel}>Adapté à votre profil ?</Text>
+
+    <View style={styles.profileMatchCard}>
+      {!!viewer.profile_match.skin_type_match && (
+        <Text style={styles.profileMatchText}>
+          {viewer.profile_match.skin_type_match}
+        </Text>
+      )}
+
+      {(viewer.profile_match.concerns_match || []).map((item, i) => (
+        <View key={`concern-match-${i}`} style={styles.bullet}>
+          <Text style={styles.positiveDot}>✓</Text>
+          <Text style={styles.bulletText}>{item}</Text>
+        </View>
+      ))}
+
+      {(viewer.profile_match.avoid_reasons || []).map((item, i) => (
+        <View key={`avoid-reason-${i}`} style={styles.bullet}>
+          <Text style={styles.warningDot}>⚠</Text>
+          <Text style={styles.bulletText}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  </View>
+)}
               {/* Compatibility */}
               {viewer.compatibility && (
                 <View style={styles.section}>
@@ -438,7 +558,7 @@ export default function Products() {
   ]}
 >
                       <View style={[styles.ingDot, { backgroundColor: flagColor(ing.flag) }]} />
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, flexShrink: 1 }}>
                         <Text style={styles.ingName}>{ing.name}</Text>
                         <Text style={styles.ingRole}>{ing.role}</Text>
                         {!!ing.note && <Text style={styles.ingNote}>{ing.note}</Text>}
@@ -455,15 +575,21 @@ export default function Products() {
   <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
     <TouchableOpacity
       style={styles.primaryBtn}
-      onPress={() =>
-        apiFetch(token, "/products/feedback", {
-          method: "POST",
-          body: JSON.stringify({
-            analysis_id: viewer.analysis_id,
-            useful: true,
-          }),
-        }).then(() => Alert.alert("Merci", "Votre retour est enregistré."))
-      }
+      onPress={async () => {
+  Alert.alert("Merci", "Votre retour est enregistré.");
+
+  try {
+    await apiFetch(token, "/products/feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        analysis_id: viewer.analysis_id,
+        useful: true,
+      }),
+    });
+  } catch (e) {
+    console.log(e);
+  }
+}}
     >
       <Text style={styles.primaryBtnText}>Oui 👍</Text>
     </TouchableOpacity>
@@ -544,17 +670,7 @@ export default function Products() {
       </Modal>
 
       {/* Live camera modal */}
-      <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
-        <LiveCamera
-          onClose={() => setCameraOpen(false)}
-          onCapture={(b64) => {
-            setImage(b64);
-            setUnreadable(null);
-            setCameraOpen(false);
-          }}
-        />
-      </Modal>
-
+      
       {/* Comparison modal */}
       <Compare visible={compareOpen} onClose={() => setCompareOpen(false)} />
     </View>
@@ -740,6 +856,46 @@ loadingBtnText: {
   fontWeight: "600",
   fontSize: 15,
 },
+scoreExplanationText: {
+  fontSize: 14,
+  color: colors.textPrimary,
+  lineHeight: 21,
+  marginBottom: spacing.sm,
+},
+
+positiveDot: {
+  color: "#7E9A88",
+  fontWeight: "700",
+},
+
+warningDot: {
+  color: "#D4B271",
+  fontWeight: "700",
+},
+
+barrierCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 18,
+  padding: spacing.md,
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+
+barrierLevel: {
+  fontSize: 16,
+  fontWeight: "700",
+  color: colors.textPrimary,
+  marginBottom: spacing.sm,
+  textTransform: "capitalize",
+},
+
+barrierAdvice: {
+  marginTop: spacing.sm,
+  fontSize: 13,
+  color: colors.textPrimary,
+  lineHeight: 19,
+  fontStyle: "italic",
+},
 premiumIngredientCard: {
   flexDirection: "row",
   gap: spacing.md,
@@ -754,5 +910,20 @@ premiumIngredientCard: {
   shadowOpacity: 0.05,
   shadowRadius: 10,
   elevation: 2,
+  minHeight: "auto",
+},
+profileMatchCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 18,
+  padding: spacing.md,
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+
+profileMatchText: {
+  fontSize: 14,
+  color: colors.textPrimary,
+  lineHeight: 21,
+  marginBottom: spacing.sm,
 },
 });

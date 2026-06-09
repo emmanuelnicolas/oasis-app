@@ -10,7 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.oasis.skincare"
+      "bundleIdentifier": "com.oasis.skincare",
+      "infoPlist": {
+        "NSCameraUsageDescription": "OASIS utilise la caméra pour analyser les ingrédients cosmétiques.",
+        "NSPhotoLibraryUsageDescription": "OASIS utilise votre galerie pour importer des photos de produits.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.oasis.skincare",
