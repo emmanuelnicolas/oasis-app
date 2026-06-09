@@ -1101,6 +1101,7 @@ Format exact :
 
   "disclaimer": "Analyse indicative, ne remplace pas un avis dermatologique."
 }}
+"""
 
     response = None
 
