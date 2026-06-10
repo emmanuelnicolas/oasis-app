@@ -1369,6 +1369,9 @@ class ProductFeedbackRequest(BaseModel):
     irritation: Optional[bool] = None
     already_used: Optional[bool] = None
 
+class ProductFavoriteRequest(BaseModel):
+    analysis_id: str
+    favorite: bool
 
 @api_router.post("/products/feedback")
 async def product_feedback(
@@ -1397,7 +1400,33 @@ async def product_feedback(
     )
 
     return {
-        "success": True
+    "success": True
+    }
+
+
+@api_router.post("/products/favorite")
+async def product_favorite(
+    payload: ProductFavoriteRequest,
+    user=Depends(get_current_user)
+):
+    result = await db.product_analyses.update_one(
+        {
+            "analysis_id": payload.analysis_id,
+            "user_id": user["user_id"]
+        },
+        {
+            "$set": {
+                "favorite": payload.favorite
+            }
+        }
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Analyse introuvable")
+
+    return {
+        "success": True,
+        "favorite": payload.favorite
     }
 # ---------- Daily Tracking ----------
 @api_router.post("/tracking/toggle")
