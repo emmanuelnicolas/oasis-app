@@ -111,6 +111,16 @@ class TrackingUpdate(BaseModel):
     step_order: int
     completed: bool
 
+class SkinTrackingRequest(BaseModel):
+    hydration: int
+    glow: int
+    texture: int
+    irritation: int
+    breakouts: int
+    redness: int
+    note: Optional[str] = ""
+    image_base64: Optional[str] = ""
+
 class SkinAnalysisRequest(BaseModel):
     image_base64: str
 
@@ -1428,6 +1438,46 @@ async def product_favorite(
         "success": True,
         "favorite": payload.favorite
     }
+    
+@api_router.post("/skin/tracking")
+async def add_skin_tracking(
+    payload: SkinTrackingRequest,
+    user=Depends(get_current_user)
+):
+    tracking = {
+        "tracking_id": f"st_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+
+        "hydration": payload.hydration,
+        "glow": payload.glow,
+        "texture": payload.texture,
+        "irritation": payload.irritation,
+        "breakouts": payload.breakouts,
+        "redness": payload.redness,
+
+        "note": payload.note,
+        "image_base64": payload.image_base64,
+
+        "created_at": now_utc(),
+    }
+
+    await db.skin_tracking.insert_one(tracking)
+
+    tracking.pop("_id", None)
+
+    return tracking
+
+
+@api_router.get("/skin/tracking")
+async def get_skin_tracking(user=Depends(get_current_user)):
+    cursor = db.skin_tracking.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(30)
+
+    items = await cursor.to_list(length=30)
+
+    return items
 # ---------- Daily Tracking ----------
 @api_router.post("/tracking/toggle")
 async def toggle_step(payload: TrackingUpdate, user=Depends(get_current_user)):
