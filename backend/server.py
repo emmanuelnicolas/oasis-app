@@ -120,6 +120,8 @@ class SkinTrackingRequest(BaseModel):
     redness: int
     note: Optional[str] = ""
     image_base64: Optional[str] = ""
+    
+    linked_products: Optional[list] = []
 
 class SkinAnalysisRequest(BaseModel):
     image_base64: str
@@ -1459,6 +1461,7 @@ async def add_skin_tracking(
         "image_base64": payload.image_base64,
 
         "created_at": now_utc(),
+        "linked_products": payload.linked_products,
     }
 
     await db.skin_tracking.insert_one(tracking)
@@ -1478,6 +1481,35 @@ async def get_skin_tracking(user=Depends(get_current_user)):
     items = await cursor.to_list(length=30)
 
     return items
+    
+@api_router.get("/products/recent")
+async def recent_products(user=Depends(get_current_user)):
+
+    cursor = db.product_analyses.find(
+        {"user_id": user["user_id"]},
+        {
+            "_id": 0,
+            "analysis_id": 1,
+            "product_name": 1
+        }
+    ).sort("created_at", -1).limit(10)
+
+    return await cursor.to_list(length=10)
+
+@api_router.delete("/skin/tracking/{tracking_id}")
+async def delete_skin_tracking(
+    tracking_id: str,
+    user=Depends(get_current_user)
+):
+    result = await db.skin_tracking.delete_one({
+        "tracking_id": tracking_id,
+        "user_id": user["user_id"]
+    })
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Suivi introuvable")
+
+    return {"ok": True}
 # ---------- Daily Tracking ----------
 @api_router.post("/tracking/toggle")
 async def toggle_step(payload: TrackingUpdate, user=Depends(get_current_user)):
