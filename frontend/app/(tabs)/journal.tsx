@@ -6,7 +6,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth, apiFetch } from "../../src/auth";
 import { colors, fonts, radius, spacing } from "../../src/theme";
 
-type Entry = { entry_id: string; image_base64: string; note: string; created_at: string };
+type Entry = {
+  tracking_id: string;
+  image_base64?: string;
+  note?: string;
+  hydration: number;
+  glow: number;
+  texture: number;
+  irritation: number;
+  breakouts: number;
+  redness: number;
+  created_at: string;
+};
 
 export default function Journal() {
   const insets = useSafeAreaInsets();
@@ -16,18 +27,32 @@ export default function Journal() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickedImage, setPickedImage] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [hydration, setHydration] = useState(5);
+  const [glow, setGlow] = useState(5);
+  const [texture, setTexture] = useState(5);
+  const [irritation, setIrritation] = useState(1);
+  const [breakouts, setBreakouts] = useState(1);
+  const [redness, setRedness] = useState(1);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<{ skin_type: string; concerns: string[]; summary: string } | null>(null);
+  const [recentProducts, setRecentProducts] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
 
   const load = useCallback(async () => {
-    try {
-      const e = await apiFetch(token, "/journal");
-      setEntries(e || []);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  try {
+    const e = await apiFetch(token, "/skin/tracking")
+	const products = await apiFetch(
+  token,
+  "/products/recent"
+);
+
+setRecentProducts(products || []);
+    setEntries(e || []);
+  } finally {
+    setLoading(false);
+  }
+}, [token]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -55,24 +80,43 @@ export default function Journal() {
   };
 
   const save = async () => {
-    if (!pickedImage) return;
-    setSaving(true);
-    try {
-      await apiFetch(token, "/journal", {
-        method: "POST",
-        body: JSON.stringify({ image_base64: pickedImage, note }),
-      });
-      setPickerOpen(false);
-      setPickedImage(null);
-      setNote("");
-      setAnalysis(null);
-      await load();
-    } catch (e: any) {
-      Alert.alert("Erreur", e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+  setSaving(true);
+
+  try {
+    await apiFetch(token, "/skin/tracking", {
+      method: "POST",
+      body: JSON.stringify({
+        image_base64: pickedImage || "",
+        note,
+        hydration,
+        glow,
+        texture,
+        irritation,
+        breakouts,
+        redness,
+		linked_products: selectedProducts,
+      }),
+    });
+
+    setPickerOpen(false);
+    setPickedImage(null);
+    setNote("");
+    setHydration(5);
+    setGlow(5);
+    setTexture(5);
+    setIrritation(1);
+    setBreakouts(1);
+    setRedness(1);
+    setAnalysis(null);
+	setSelectedProducts([]);
+
+    await load();
+  } catch (e: any) {
+    Alert.alert("Erreur", e.message);
+  } finally {
+    setSaving(false);
+  }
+};
 
   const analyze = async () => {
     if (!pickedImage) return;
@@ -92,8 +136,8 @@ export default function Journal() {
 
   const removeEntry = async (id: string) => {
     try {
-      await apiFetch(token, `/journal/${id}`, { method: "DELETE" });
-      setEntries((p) => p.filter((e) => e.entry_id !== id));
+      await apiFetch(token, `/skin/tracking/${id}`, { method: "DELETE" });
+      setEntries((p) => p.filter((e) => e.tracking_id !== id));
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
     }
@@ -124,21 +168,33 @@ export default function Journal() {
         ) : (
           <View style={styles.grid}>
             {entries.map((e) => (
-              <View key={e.entry_id} style={styles.entryCard} testID={`entry-${e.entry_id}`}>
+              <View key={e.tracking_id} style={styles.entryCard} testID={`entry-${e.tracking_id}`}>
                 <Image source={{ uri: `data:image/jpeg;base64,${e.image_base64}` }} style={styles.entryImage} />
                 <View style={styles.entryFooter}>
                   <Text style={styles.entryDate}>{new Date(e.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</Text>
-                  <TouchableOpacity onPress={() => removeEntry(e.entry_id)} testID={`delete-${e.entry_id}`}>
+                  <TouchableOpacity onPress={() => removeEntry(e.tracking_id)} testID={`delete-${e.tracking_id}`}>
                     <Ionicons name="trash-outline" size={16} color={colors.textDisabled} />
                   </TouchableOpacity>
                 </View>
                 {!!e.note && <Text style={styles.entryNote} numberOfLines={2}>{e.note}</Text>}
-              </View>
+                <View style={styles.metricsRow}>
+  <Text style={styles.metric}>💧 {e.hydration}</Text>
+  <Text style={styles.metric}>✨ {e.glow}</Text>
+  <Text style={styles.metric}>🧴 {e.texture}</Text>
+</View>
+
+<View style={styles.metricsRow}>
+  <Text style={styles.metric}>🔥 {e.irritation}</Text>
+  <Text style={styles.metric}>🔴 {e.breakouts}</Text>
+  <Text style={styles.metric}>🌸 {e.redness}</Text>
+</View>
+
+</View>
             ))}
           </View>
         )}
       </ScrollView>
-
+	
       <Modal visible={pickerOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { paddingBottom: insets.bottom + spacing.md }]}>
@@ -164,6 +220,138 @@ export default function Journal() {
                 placeholderTextColor={colors.textDisabled}
                 multiline
               />
+			  <Text style={styles.label}>Hydratation : {hydration}/10</Text>
+			  <Text style={styles.label}>
+			   Produits utilisés récemment
+			   </Text>
+			   {recentProducts.map((p: any) => (
+  <TouchableOpacity
+    key={p.analysis_id}
+    style={[
+      styles.productChip,
+      selectedProducts.some(
+        x => x.analysis_id === p.analysis_id
+      ) && styles.productChipActive
+    ]}
+    onPress={() => {
+
+      const exists =
+        selectedProducts.some(
+          x => x.analysis_id === p.analysis_id
+        );
+
+      if (exists) {
+        setSelectedProducts(
+          selectedProducts.filter(
+            x => x.analysis_id !== p.analysis_id
+          )
+        );
+      } else {
+        setSelectedProducts([
+          ...selectedProducts,
+          p
+        ]);
+      }
+    }}
+  >
+    <Text>{p.product_name}</Text>
+  </TouchableOpacity>
+))}
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        hydration === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setHydration(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+<Text style={styles.label}>glow : {glow}/10</Text>
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        glow === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setGlow(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+<Text style={styles.label}>texture : {texture}/10</Text>
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        texture === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setTexture(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+<Text style={styles.label}>irritation : {irritation}/10</Text>
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        irritation === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setIrritation(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+<Text style={styles.label}>breakouts : {breakouts}/10</Text>
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        breakouts === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setBreakouts(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+<Text style={styles.label}>redness : {redness}/10</Text>
+
+<View style={styles.scaleRow}>
+  {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+    <TouchableOpacity
+      key={n}
+      style={[
+        styles.scaleBtn,
+        redness === n && styles.scaleBtnActive
+      ]}
+      onPress={() => setRedness(n)}
+    >
+      <Text>{n}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
 
               {analysis && (
                 <View style={styles.analysisCard} testID="analysis-result">
@@ -224,4 +412,50 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontWeight: "500", fontSize: 15 },
   secondaryBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.button, paddingVertical: 12, alignItems: "center", marginBottom: spacing.sm },
   secondaryBtnText: { color: colors.primary, fontWeight: "500", fontSize: 14 },
+  scaleRow: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginBottom: spacing.md,
+},
+
+scaleBtn: {
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  borderWidth: 1,
+  borderColor: colors.border,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: colors.surface,
+},
+
+scaleBtnActive: {
+  backgroundColor: colors.primary,
+  borderColor: colors.primary,
+},
+metricsRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  marginTop: 4,
+  paddingHorizontal: spacing.sm,
+},
+
+metric: {
+  fontSize: 11,
+  color: colors.textSecondary,
+},
+productChip: {
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  borderWidth: 1,
+  borderColor: colors.border,
+  backgroundColor: colors.surface,
+  marginBottom: 8,
+},
+
+productChipActive: {
+  backgroundColor: colors.primary,
+},
 });
