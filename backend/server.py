@@ -131,7 +131,17 @@ class ProductAnalysisRequest(BaseModel):
     name: Optional[str] = ""
     image_base64: Optional[str] = ""
     ingredients_text: Optional[str] = ""
+    
+class ProductOutcomeFeedbackRequest(BaseModel):
+    analysis_id: str
+    product_name: str
 
+    overall_result: str
+
+    hydration_delta: int = 0
+    glow_delta: int = 0
+    irritation_delta: int = 0
+    breakouts_delta: int = 0
 
 # ---------- Helpers ----------
 def now_utc() -> datetime:
@@ -1440,6 +1450,89 @@ async def product_favorite(
         "success": True,
         "favorite": payload.favorite
     }
+@api_router.post("/product-feedback")
+async def create_product_feedback(
+    payload: ProductOutcomeFeedbackRequest,
+    user=Depends(get_current_user)
+):
+    feedback = {
+        "feedback_id": f"pf_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "analysis_id": payload.analysis_id,
+        "product_name": payload.product_name,
+        "overall_result": payload.overall_result,
+        "hydration_delta": payload.hydration_delta,
+        "glow_delta": payload.glow_delta,
+        "irritation_delta": payload.irritation_delta,
+        "breakouts_delta": payload.breakouts_delta,
+        "created_at": now_utc(),
+    }
+
+    await db.product_feedback.insert_one(feedback)
+
+    return {
+        "success": True,
+        "feedback_id": feedback["feedback_id"]
+    }
+
+
+@api_router.get("/product-feedback/pending")
+async def pending_feedback(
+    user=Depends(get_current_user)
+):
+
+    seven_days_ago = now_utc() - timedelta(days=7)
+
+    cursor = db.skin_tracking.find(
+        {
+            "user_id": user["user_id"],
+            "created_at": {
+                "$lte": seven_days_ago
+            },
+            "linked_products.0": {
+                "$exists": True
+            }
+        },
+        {
+            "_id": 0,
+            "tracking_id": 1,
+            "linked_products": 1,
+            "created_at": 1
+        }
+    )
+
+    trackings = await cursor.to_list(length=100)
+
+    pending = []
+
+    for tracking in trackings:
+
+        for product in tracking.get(
+            "linked_products",
+            []
+        ):
+
+            existing = await db.product_feedback.find_one({
+                "user_id": user["user_id"],
+                "analysis_id": product["analysis_id"]
+            })
+
+            if existing:
+                continue
+
+            days_used = (
+                now_utc() -
+                tracking["created_at"]
+            ).days
+
+            pending.append({
+                "tracking_id": tracking["tracking_id"],
+                "analysis_id": product["analysis_id"],
+                "product_name": product["product_name"],
+                "days_used": days_used
+            })
+
+    return pending  
     
 @api_router.post("/skin/tracking")
 async def add_skin_tracking(
