@@ -39,6 +39,7 @@ export default function Journal() {
   const [recentProducts, setRecentProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [pendingFeedback, setPendingFeedback] = useState<any[]>([]);
+  const [learnings, setLearnings] = useState<any>(null);
   const sortedEntries = [...entries].sort(
   (a, b) =>
     new Date(b.created_at).getTime() -
@@ -66,6 +67,7 @@ const getTrend = (key: keyof Entry, label: string, emoji: string, reverse = fals
   return `${emoji} ${label} est à surveiller.`;
 };
 
+
 const insights = [
   getTrend("hydration", "Votre hydratation", "💧"),
   getTrend("glow", "Votre glow", "✨"),
@@ -75,7 +77,7 @@ const insights = [
   getTrend("redness", "Vos rougeurs", "🌸", true),
 ].filter(Boolean);
 
-  const load = useCallback(async () => {
+const load = useCallback(async () => {
   try {
     const e = await apiFetch(token, "/skin/tracking");
 	setEntries(e || []);
@@ -92,15 +94,28 @@ try {
     "/product-feedback/pending"
   );
 
-   setPendingFeedback(feedback || []);
- } catch {
-   setPendingFeedback([]);
-} 
+  setPendingFeedback(feedback || []);
+} catch {
+  setPendingFeedback([]);
+}
+
+try {
+  const learningData = await apiFetch(
+    token,
+    "/oasis-learnings"
+  );
+
+  setLearnings(learningData);
+} catch {
+  setLearnings(null);
+}
 } finally {
     setLoading(false);}
 }, [token]);
 
   useEffect(() => { load(); }, [load]);
+  
+  
 
   const pickImage = async () => {
     if (Platform.OS !== "web") {
@@ -297,9 +312,41 @@ const submitFeedback = async (
     </View>
   </View>
 )}
+{learnings && (
+  <View style={styles.learningCard}>
+    <Text style={styles.learningTitle}>
+      🧠 Ce qu'OASIS apprend
+    </Text>
+
+    <Text style={styles.learningStats}>
+      Feedbacks : {learnings.total_feedbacks}
+    </Text>
+
+    <Text style={styles.learningStats}>
+      👍 {learnings.positive_products}
+      {"   "}
+      ➖ {learnings.neutral_products}
+      {"   "}
+      👎 {learnings.negative_products}
+    </Text>
+
+    {(learnings.insights || []).map(
+      (item: string, index: number) => (
+        <Text
+          key={index}
+          style={styles.learningText}
+        >
+          • {item}
+        </Text>
+      )
+    )}
+  </View>
+)}
 {insights.length > 0 && (
   <View style={styles.insightsCard}>
-    <Text style={styles.insightsTitle}>✨ Observations OASIS</Text>
+    <Text style={styles.insightsTitle}>
+      ✨ Observations OASIS
+    </Text>
 
     {insights.slice(0, 3).map((item, index) => (
       <Text key={index} style={styles.insightText}>
@@ -308,6 +355,7 @@ const submitFeedback = async (
     ))}
   </View>
 )}
+  
         {entries.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="camera-outline" size={48} color={colors.textDisabled} />
@@ -672,5 +720,29 @@ feedbackButton: {
   borderWidth: 1,
   borderColor: colors.border,
   alignItems: "center",
+},
+learningCard: {
+  backgroundColor: colors.surface,
+  borderRadius: radius.card,
+  padding: spacing.lg,
+  marginBottom: spacing.lg,
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+
+learningTitle: {
+  fontSize: 18,
+  fontWeight: "600",
+  marginBottom: spacing.sm,
+},
+
+learningStats: {
+  color: colors.textSecondary,
+  marginBottom: spacing.xs,
+},
+
+learningText: {
+  color: colors.textPrimary,
+  marginTop: 4,
 },
 });
