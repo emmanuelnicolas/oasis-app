@@ -313,35 +313,57 @@ const submitFeedback = async (
   </View>
 )}
 {learnings && (
-  <View style={styles.learningCard}>
-    <Text style={styles.learningTitle}>
-      🧠 Ce qu'OASIS apprend
-    </Text>
+  <>
+    <View style={styles.learningCard}>
+      <Text style={styles.learningTitle}>
+        🧠 Ce qu'OASIS apprend
+      </Text>
 
-    <Text style={styles.learningStats}>
-      Feedbacks : {learnings.total_feedbacks}
-    </Text>
+      <Text style={styles.learningStats}>
+        Feedbacks : {learnings.total_feedbacks}
+      </Text>
 
-    <Text style={styles.learningStats}>
-      👍 {learnings.positive_products}
-      {"   "}
-      ➖ {learnings.neutral_products}
-      {"   "}
-      👎 {learnings.negative_products}
-    </Text>
+      <Text style={styles.learningStats}>
+        👍 {learnings.positive_products}
+        {"   "}
+        ➖ {learnings.neutral_products}
+        {"   "}
+        👎 {learnings.negative_products}
+      </Text>
 
-    {(learnings.insights || []).map(
-      (item: string, index: number) => (
-        <Text
-          key={index}
-          style={styles.learningText}
-        >
-          • {item}
+      {(learnings.insights || []).map(
+        (item: string, index: number) => (
+          <Text
+            key={index}
+            style={styles.learningText}
+          >
+            • {item}
+          </Text>
+        )
+      )}
+    </View>
+
+    {(learnings.top_ingredients || []).length > 0 && (
+      <View style={styles.ingredientLearningBlock}>
+        <Text style={styles.learningTitle}>
+          Ingrédients qui semblent vous convenir
         </Text>
-      )
+
+        {learnings.top_ingredients.map(
+          (item: any, index: number) => (
+            <Text
+              key={index}
+              style={styles.learningText}
+            >
+              ✓ {item.ingredient} — {item.positive} positif(s), {item.negative} négatif(s)
+            </Text>
+          )
+        )}
+      </View>
     )}
-  </View>
+  </>
 )}
+
 {insights.length > 0 && (
   <View style={styles.insightsCard}>
     <Text style={styles.insightsTitle}>
@@ -744,5 +766,8 @@ learningStats: {
 learningText: {
   color: colors.textPrimary,
   marginTop: 4,
+},
+ingredientLearningBlock: {
+  marginTop: spacing.md,
 },
 });
