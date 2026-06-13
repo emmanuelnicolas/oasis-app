@@ -1533,6 +1533,62 @@ async def pending_feedback(
             })
 
     return pending  
+@api_router.get("/oasis-learnings")
+async def oasis_learnings(
+    user=Depends(get_current_user)
+):
+    feedbacks = await db.product_feedback.find(
+        {
+            "user_id": user["user_id"]
+        },
+        {
+            "_id": 0
+        }
+    ).to_list(length=100)
+
+    improved_count = 0
+    stable_count = 0
+    worse_count = 0
+
+    for feedback in feedbacks:
+        result = feedback.get("overall_result")
+
+        if result == "improved":
+            improved_count += 1
+        elif result == "stable":
+            stable_count += 1
+        elif result == "worse":
+            worse_count += 1
+
+    insights = []
+
+    if improved_count >= 1:
+        insights.append(
+            "Certains produits semblent avoir un effet positif sur votre peau."
+        )
+
+    if stable_count >= 1:
+        insights.append(
+            "Votre peau semble rester stable avec certains produits."
+        )
+
+    if worse_count >= 1:
+        insights.append(
+            "Certains produits semblent moins bien convenir à votre peau."
+        )
+
+    if len(feedbacks) == 0:
+        insights.append(
+            "OASIS commence à apprendre dès que vous donnez des retours sur vos produits."
+        )
+
+    return {
+        "total_feedbacks": len(feedbacks),
+        "positive_products": improved_count,
+        "neutral_products": stable_count,
+        "negative_products": worse_count,
+        "insights": insights
+    }
     
 @api_router.post("/skin/tracking")
 async def add_skin_tracking(
