@@ -1581,13 +1581,59 @@ async def oasis_learnings(
         insights.append(
             "OASIS commence à apprendre dès que vous donnez des retours sur vos produits."
         )
+    ingredient_stats = {}
+
+    for feedback in feedbacks:
+        analysis = await db.product_analyses.find_one(
+            {
+                "user_id": user["user_id"],
+                "analysis_id": feedback.get("analysis_id")
+            },
+            {
+                "_id": 0,
+                "ingredients": 1
+            }
+        )
+
+        if not analysis:
+            continue
+
+        for ingredient in analysis.get("ingredients", []):
+            name = ingredient.get("name")
+
+            if not name:
+                continue
+
+            if name not in ingredient_stats:
+                ingredient_stats[name] = {
+                    "ingredient": name,
+                    "positive": 0,
+                    "neutral": 0,
+                    "negative": 0
+                }
+
+            result = feedback.get("overall_result")
+
+            if result == "improved":
+                ingredient_stats[name]["positive"] += 1
+            elif result == "stable":
+                ingredient_stats[name]["neutral"] += 1
+            elif result == "worse":
+                ingredient_stats[name]["negative"] += 1
+        
+    top_ingredients = sorted(
+        ingredient_stats.values(),
+        key=lambda x: x["positive"] - x["negative"],
+        reverse=True
+    )[:5]
 
     return {
         "total_feedbacks": len(feedbacks),
         "positive_products": improved_count,
         "neutral_products": stable_count,
         "negative_products": worse_count,
-        "insights": insights
+        "insights": insights,
+        "top_ingredients": top_ingredients
     }
     
 @api_router.post("/skin/tracking")
