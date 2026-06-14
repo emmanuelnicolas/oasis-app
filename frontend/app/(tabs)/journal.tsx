@@ -361,6 +361,42 @@ const submitFeedback = async (
         )}
       </View>
     )}
+	{(learnings.ingredient_correlations || []).length > 0 && (
+  <View style={styles.correlationCard}>
+    <Text style={styles.learningTitle}>
+      🧪 Corrélations observées
+    </Text>
+
+    {learnings.ingredient_correlations.map(
+      (item: any, index: number) => (
+        <View
+          key={index}
+          style={styles.correlationItem}
+        >
+          <Text style={styles.correlationIngredient}>
+            {item.ingredient}
+          </Text>
+
+          <Text style={styles.learningText}>
+            💧 Hydratation : {item.avg_hydration}
+          </Text>
+
+          <Text style={styles.learningText}>
+            ✨ Glow : {item.avg_glow}
+          </Text>
+
+          <Text style={styles.learningText}>
+            🧴 Texture : {item.avg_texture}
+          </Text>
+
+          <Text style={styles.learningText}>
+            🔥 Irritation : {item.avg_irritation}
+          </Text>
+        </View>
+      )
+    )}
+  </View>
+)}
   </>
 )}
 
@@ -769,5 +805,26 @@ learningText: {
 },
 ingredientLearningBlock: {
   marginTop: spacing.md,
+},
+
+correlationCard: {
+  backgroundColor: colors.surface,
+  borderRadius: radius.lg,
+  padding: spacing.md,
+  marginTop: spacing.md,
+},
+
+correlationItem: {
+  marginTop: spacing.sm,
+  paddingBottom: spacing.sm,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.border,
+},
+
+correlationIngredient: {
+  fontWeight: "600",
+  fontSize: 15,
+  marginBottom: 4,
+  color: colors.textPrimary,
 },
 });
