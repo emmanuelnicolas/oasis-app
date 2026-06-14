@@ -965,6 +965,56 @@ async def check_daily_analysis_limit(user_id: str, limit: int = 5):
             detail="Limite quotidienne atteinte. Réessayez demain."
         )
 
+async def get_user_ingredient_preferences(user_id: str) -> Dict[str, int]:
+    feedbacks = await db.product_feedback.find(
+        {
+            "user_id": user_id
+        },
+        {
+            "_id": 0,
+            "analysis_id": 1,
+            "overall_result": 1
+        }
+    ).to_list(length=100)
+
+    preferences = {}
+
+    for feedback in feedbacks:
+        analysis = await db.product_analyses.find_one(
+            {
+                "user_id": user_id,
+                "analysis_id": feedback.get("analysis_id")
+            },
+            {
+                "_id": 0,
+                "ingredients": 1
+            }
+        )
+
+        if not analysis:
+            continue
+
+        result = feedback.get("overall_result")
+
+        for ingredient in analysis.get("ingredients", []):
+            name = normalize_ingredient_name(
+                ingredient.get("name")
+            )
+
+            if not name:
+                continue
+
+            if name not in preferences:
+                preferences[name] = 0
+
+            if result == "improved":
+                preferences[name] += 2
+            elif result == "stable":
+                preferences[name] += 1
+            elif result == "worse":
+                preferences[name] -= 2
+
+    return preferences
 @api_router.post("/products/analyze")
 async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_current_user)):
     if not payload.image_base64 and not payload.ingredients_text:
@@ -974,7 +1024,11 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
         )
 
     profile = user.get("skin_profile") or {}
-
+    
+    ingredient_preferences = await get_user_ingredient_preferences(
+        user["user_id"]
+    )
+    
     await check_daily_analysis_limit(user["user_id"], limit=5)
 
     ingredients_map = await load_ingredients_map()
@@ -1292,7 +1346,19 @@ Format exact :
             ingredients_map
         )
 
-        product["match_score"] = match_score
+        bonus = 0
+
+        for ingredient in product.get("ingredients", []):
+            ingredient_name = normalize_ingredient_name(
+                ingredient
+            )
+
+            bonus += ingredient_preferences.get(
+                ingredient_name,
+                0
+            )
+
+        product["match_score"] = match_score + bonus
         recommended_products.append(product)
 
     recommended_products.sort(
