@@ -1626,14 +1626,110 @@ async def oasis_learnings(
         key=lambda x: x["positive"] - x["negative"],
         reverse=True
     )[:5]
+    tracking_entries = await db.skin_tracking.find(
+        {
+            "user_id": user["user_id"],
+            "linked_products.0": {
+                "$exists": True
+            }
+        },
+        {
+            "_id": 0,
+            "hydration": 1,
+            "glow": 1,
+            "texture": 1,
+            "irritation": 1,
+            "breakouts": 1,
+            "redness": 1,
+            "linked_products": 1
+        }
+    ).to_list(length=100)
 
+    ingredient_effects = {}
+
+    for entry in tracking_entries:
+        linked_products = entry.get("linked_products", [])
+
+        for product in linked_products:
+            analysis = await db.product_analyses.find_one(
+                {
+                    "user_id": user["user_id"],
+                    "analysis_id": product.get("analysis_id")
+                },
+                {
+                    "_id": 0,
+                    "ingredients": 1
+                }
+            )
+
+            if not analysis:
+                continue
+
+            for ingredient in analysis.get("ingredients", []):
+                name = ingredient.get("name")
+
+                if not name:
+                    continue
+
+                if name not in ingredient_effects:
+                    ingredient_effects[name] = {
+                        "ingredient": name,
+                        "count": 0,
+                        "hydration": 0,
+                        "glow": 0,
+                        "texture": 0,
+                        "irritation": 0,
+                        "breakouts": 0,
+                        "redness": 0
+                    }
+
+                ingredient_effects[name]["count"] += 1
+                ingredient_effects[name]["hydration"] += entry.get("hydration", 0)
+                ingredient_effects[name]["glow"] += entry.get("glow", 0)
+                ingredient_effects[name]["texture"] += entry.get("texture", 0)
+                ingredient_effects[name]["irritation"] += entry.get("irritation", 0)
+                ingredient_effects[name]["breakouts"] += entry.get("breakouts", 0)
+                ingredient_effects[name]["redness"] += entry.get("redness", 0)
+
+    ingredient_correlations = []
+
+    for item in ingredient_effects.values():
+        count = item["count"]
+
+        if count == 0:
+            continue
+
+        ingredient_correlations.append({
+            "ingredient": item["ingredient"],
+            "count": count,
+            "avg_hydration": round(item["hydration"] / count, 1),
+            "avg_glow": round(item["glow"] / count, 1),
+            "avg_texture": round(item["texture"] / count, 1),
+            "avg_irritation": round(item["irritation"] / count, 1),
+            "avg_breakouts": round(item["breakouts"] / count, 1),
+            "avg_redness": round(item["redness"] / count, 1)
+        })
+
+    ingredient_correlations = sorted(
+        ingredient_correlations,
+        key=lambda x: (
+            x["avg_hydration"] +
+            x["avg_glow"] +
+            x["avg_texture"] -
+            x["avg_irritation"] -
+            x["avg_breakouts"] -
+            x["avg_redness"]
+        ),
+        reverse=True
+    )[:5]
     return {
         "total_feedbacks": len(feedbacks),
         "positive_products": improved_count,
         "neutral_products": stable_count,
         "negative_products": worse_count,
         "insights": insights,
-        "top_ingredients": top_ingredients
+        "top_ingredients": top_ingredients,
+        "ingredient_correlations": ingredient_correlations
     }
     
 @api_router.post("/skin/tracking")
