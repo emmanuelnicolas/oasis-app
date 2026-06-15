@@ -1307,6 +1307,42 @@ Format exact :
         ingredients_map
     )
 
+    matched_ingredients = []
+    avoid_ingredients = []
+
+    for ingredient in ingredient_source:
+        ingredient_name = normalize_ingredient_name(
+            ingredient
+        )
+
+        preference_score = ingredient_preferences.get(
+            ingredient_name,
+            0
+        )
+
+        if preference_score >= 2:
+            matched_ingredients.append(
+                ingredient_name
+            )
+
+        elif preference_score <= -2:
+            avoid_ingredients.append(
+                ingredient_name
+            )
+
+    confidence = min(
+        100,
+        50 +
+        (len(matched_ingredients) * 15) -
+        (len(avoid_ingredients) * 10)
+    )
+
+    personalized_recommendation = {
+        "matched_ingredients": matched_ingredients[:5],
+        "avoid_ingredients": avoid_ingredients[:5],
+        "confidence": confidence
+    }
+
     data["ingredient_analysis"] = ingredient_analysis
     if ingredient_analysis.get("ingredient_score") is not None:
         data["score"] = ingredient_analysis["ingredient_score"]
@@ -1367,6 +1403,9 @@ Format exact :
     )
 
     data["recommended_products"] = recommended_products[:5]
+    data["personalized_recommendation"] = (
+        personalized_recommendation
+    )
 
     analysis_doc = {
         "analysis_id": f"pa_{uuid.uuid4().hex[:12]}",
@@ -1387,8 +1426,11 @@ Format exact :
         "formula_positioning": data.get("formula_positioning"),
         "conflict_analysis": data.get("conflict_analysis"),
         "recommended_products": data.get("recommended_products", []),
+        "personalized_recommendation":
+            data.get("personalized_recommendation"),
         "created_at": now_utc(),
         "created_at_day": now_utc().date().isoformat(),
+        
     }
 
     if cache_key and extracted_text:
