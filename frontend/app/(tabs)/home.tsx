@@ -64,7 +64,14 @@ export default function Home() {
   const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bonjour" : "Bonsoir";
   const focusType = hour < 17 ? "matin" : "soir";
   const focusRoutine = routines[focusType];
+	const completedCount = focusRoutine
+		? focusRoutine.steps.filter((step) => {
+		const key = `${focusType}_${step.order}`;
+		return !!tracking[key];
+    }).length
+  : 0;
 
+  const totalSteps = focusRoutine?.steps.length || 0;
   return (
     <ScrollView
       style={{ backgroundColor: colors.bg }}
@@ -144,6 +151,9 @@ export default function Home() {
   {focusRoutine.title}
 </Text>
           <Text style={styles.routineDesc}>{focusRoutine.description}</Text>
+		  <Text style={styles.progressText}>
+			{completedCount}/{totalSteps} étapes réalisées aujourd'hui
+		  </Text>
           {focusRoutine.steps.map((step) => {
             const key = `${focusType}_${step.order}`;
             const done = !!tracking[key];
@@ -234,5 +244,11 @@ routineMoment: {
   textTransform: "uppercase",
   marginBottom: 6,
   fontWeight: "600",
+},
+progressText: {
+  color: colors.primary,
+  fontSize: 14,
+  fontWeight: "600",
+  marginBottom: spacing.md,
 },
 });
