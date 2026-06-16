@@ -43,14 +43,13 @@
         }
       ],
       [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-image.png",
-          "imageWidth": 380,
-          "resizeMode": "contain",
-          "backgroundColor": "#F2EFEA"
-        }
-      ],
+		"expo-splash-screen",
+		{
+		"image": "./assets/images/splash-image.png",
+		"resizeMode": "cover",
+		"backgroundColor": "#F2EFEA"
+		}
+	],
       "expo-web-browser"
     ],
     "experiments": {
