@@ -954,10 +954,10 @@ def make_inci_hash(text: str) -> str:
 async def check_daily_analysis_limit(user_id: str, limit: int = 5):
     today = now_utc().date().isoformat()
 
-    count = await db.product_analyses.count_documents({
-        "user_id": user_id,
-        "created_at_day": today
-    })
+    count = await db.product_analysis_usage.count_documents({
+    "user_id": user_id,
+    "created_at_day": today
+})
 
     if count >= limit:
         raise HTTPException(
@@ -1031,6 +1031,7 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
     
     await check_daily_analysis_limit(user["user_id"], limit=5)
 
+
     ingredients_map = await load_ingredients_map()
 
     cache_key = None
@@ -1055,7 +1056,12 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
 
             await db.product_analyses.insert_one(cached_result)
             cached_result.pop("_id", None)
-
+            await db.product_analysis_usage.insert_one({
+                "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
+                "user_id": user["user_id"],
+                "created_at_day": now_utc().date().isoformat(),
+                "created_at": now_utc()
+            })
             return cached_result
 
     profile_text = (
@@ -1253,7 +1259,12 @@ Format exact :
 
         await db.product_analyses.insert_one(fallback_doc)
         fallback_doc.pop("_id", None)
-
+        await db.product_analysis_usage.insert_one({
+            "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
+            "user_id": user["user_id"],
+            "created_at_day": now_utc().date().isoformat(),
+            "created_at": now_utc()
+        })
         return fallback_doc
 
     try:
@@ -1290,7 +1301,12 @@ Format exact :
 
             await db.product_analyses.insert_one(cached_result)
             cached_result.pop("_id", None)
-
+            await db.product_analysis_usage.insert_one({
+                "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
+                "user_id": user["user_id"],
+                "created_at_day": now_utc().date().isoformat(),
+                "created_at": now_utc()
+            })
             return cached_result
 
     ingredient_source = [
@@ -1449,6 +1465,13 @@ Format exact :
         )
 
     await db.product_analyses.insert_one(analysis_doc)
+
+    await db.product_analysis_usage.insert_one({
+        "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "created_at_day": now_utc().date().isoformat(),
+        "created_at": now_utc()
+    })
 
     analysis_doc.pop("_id", None)
 
