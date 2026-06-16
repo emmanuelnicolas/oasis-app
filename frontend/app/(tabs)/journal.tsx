@@ -255,7 +255,7 @@ const submitFeedback = async (
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.subtitle}>Suivez votre progression au fil du temps. Vous pouvez aussi obtenir une analyse IA de votre peau.</Text>
+        <Text style={styles.subtitle}>Suivez l'évolution de votre peau et laissez OASIS apprendre de vos routines.</Text>
 		{pendingFeedback.length > 0 && (
   <View style={styles.feedbackCard}>
     <Text style={styles.feedbackTitle}>
@@ -316,29 +316,48 @@ const submitFeedback = async (
   <>
     <View style={styles.learningCard}>
       <Text style={styles.learningTitle}>
-        🧠 Ce qu'OASIS apprend
+        🧠 Learnings OASIS
       </Text>
 
       <Text style={styles.learningStats}>
         Feedbacks : {learnings.total_feedbacks}
       </Text>
 
-      <Text style={styles.learningStats}>
-        👍 {learnings.positive_products}
-        {"   "}
-        ➖ {learnings.neutral_products}
-        {"   "}
-        👎 {learnings.negative_products}
-      </Text>
+      <View style={styles.learningStatsRow}>
+  <View style={styles.learningBadge}>
+    <Text style={styles.learningBadgeEmoji}>👍</Text>
+    <Text style={styles.learningBadgeNumber}>
+      {learnings.positive_products}
+    </Text>
+  </View>
+
+  <View style={styles.learningBadge}>
+    <Text style={styles.learningBadgeEmoji}>➖</Text>
+    <Text style={styles.learningBadgeNumber}>
+      {learnings.neutral_products}
+    </Text>
+  </View>
+
+  <View style={styles.learningBadge}>
+    <Text style={styles.learningBadgeEmoji}>👎</Text>
+    <Text style={styles.learningBadgeNumber}>
+      {learnings.negative_products}
+    </Text>
+  </View>
+</View>
 
       {(learnings.insights || []).map(
         (item: string, index: number) => (
-          <Text
-            key={index}
-            style={styles.learningText}
-          >
-            • {item}
-          </Text>
+          <View
+  key={index}
+  style={styles.learningInsightBox}
+>
+  <Text
+    style={styles.learningInsightText}
+  >
+    {item}
+  </Text>
+</View>
         )
       )}
     </View>
@@ -350,15 +369,16 @@ const submitFeedback = async (
         </Text>
 
         {learnings.top_ingredients.map(
-          (item: any, index: number) => (
-            <Text
-              key={index}
-              style={styles.learningText}
-            >
-              ✓ {item.ingredient} — {item.positive} positif(s), {item.negative} négatif(s)
-            </Text>
-          )
-        )}
+			(item: any, index: number) => (
+				<Text
+				 key={index}
+				 style={styles.learningText}
+				 numberOfLines={1}
+				>
+				✓ {item.ingredient}
+			</Text>
+		   )
+		 )}
       </View>
     )}
 	{(learnings.ingredient_correlations || []).length > 0 && (
@@ -790,18 +810,63 @@ learningCard: {
 
 learningTitle: {
   fontSize: 18,
-  fontWeight: "600",
-  marginBottom: spacing.sm,
+  fontWeight: "700",
+  color: colors.textPrimary,
+  marginBottom: spacing.md,
+  lineHeight: 28,
 },
 
 learningStats: {
   color: colors.textSecondary,
-  marginBottom: spacing.xs,
+  fontSize: 15,
+  marginBottom: spacing.sm,
+},
+
+learningStatsRow: {
+  flexDirection: "row",
+  gap: 10,
+  marginBottom: spacing.md,
+},
+
+learningBadge: {
+  flex: 1,
+  backgroundColor: colors.bg,
+  borderRadius: 18,
+  paddingVertical: 10,
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+
+learningBadgeEmoji: {
+  fontSize: 20,
+  marginBottom: 2,
+},
+
+learningBadgeNumber: {
+  fontSize: 16,
+  fontWeight: "700",
+  color: colors.textPrimary,
+},
+
+learningInsightBox: {
+  backgroundColor: colors.bg,
+  borderRadius: 18,
+  padding: spacing.md,
+  marginTop: spacing.sm,
+},
+
+learningInsightText: {
+  color: colors.textPrimary,
+  fontSize: 15,
+  lineHeight: 22,
 },
 
 learningText: {
   color: colors.textPrimary,
-  marginTop: 4,
+  fontSize: 14,
+  lineHeight: 20,
+  marginTop: 6,
 },
 ingredientLearningBlock: {
   marginTop: spacing.md,
@@ -809,7 +874,7 @@ ingredientLearningBlock: {
 
 correlationCard: {
   backgroundColor: colors.surface,
-  borderRadius: radius.lg,
+  borderRadius: radius.card,
   padding: spacing.md,
   marginTop: spacing.md,
 },
