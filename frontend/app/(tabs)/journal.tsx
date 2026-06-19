@@ -79,38 +79,27 @@ const insights = [
 
 const load = useCallback(async () => {
   try {
-    const e = await apiFetch(token, "/skin/tracking");
-	setEntries(e || []);
-	
-	const products = await apiFetch(
-  token,
-  "/products/recent"
-);
+   
+    const [
+      e,
+      products,
+      feedback,
+      learningData,
+    ] = await Promise.all([
+      apiFetch(token, "/skin/tracking"),
+      apiFetch(token, "/products/recent"),
+      apiFetch(token, "/product-feedback/pending").catch(() => []),
+      apiFetch(token, "/oasis-learnings").catch(() => null),
+    ]);
 
-setRecentProducts(products || []);
-try {
-  const feedback = await apiFetch(
-    token,
-    "/product-feedback/pending"
-  );
+    setEntries(e || []);
+    setRecentProducts(products || []);
+    setPendingFeedback(feedback || []);
+    setLearnings(learningData);
 
-  setPendingFeedback(feedback || []);
-} catch {
-  setPendingFeedback([]);
-}
-
-try {
-  const learningData = await apiFetch(
-    token,
-    "/oasis-learnings"
-  );
-
-  setLearnings(learningData);
-} catch {
-  setLearnings(null);
-}
-} finally {
-    setLoading(false);}
+  } finally {
+    setLoading(false);
+  }
 }, [token]);
 
   useEffect(() => { load(); }, [load]);

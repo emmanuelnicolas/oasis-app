@@ -21,40 +21,55 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      const [r, t, s, st] = await Promise.all([
-        apiFetch(token, "/routines"),
-        apiFetch(token, "/tracking/today"),
-        apiFetch(token, "/tips/seasonal"),
-        apiFetch(token, "/tracking/stats"),
-      ]);
-      setRoutines(r || {});
-      setTracking((t && t.completed) || {});
-      setTip(s);
-      setStats(st);
-    } catch (e) {
-      console.log("home load error", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [token]);
+  if (!token) {
+    setLoading(false);
+    setRefreshing(false);
+    return;
+  }
+
+  try {
+    const [r, t, s, st] = await Promise.all([
+      apiFetch(token, "/routines"),
+      apiFetch(token, "/tracking/today"),
+      apiFetch(token, "/tips/seasonal"),
+      apiFetch(token, "/tracking/stats"),
+    ]);
+
+    setRoutines(r || {});
+    setTracking((t && t.completed) || {});
+    setTip(s);
+    setStats(st);
+  } catch (e) {
+    console.log("home load error", e);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [token]);
 
   useEffect(() => { load(); }, [load]);
 
   const toggleStep = async (rtype: string, order: number) => {
-    const key = `${rtype}_${order}`;
-    const newVal = !tracking[key];
-    setTracking((p) => ({ ...p, [key]: newVal }));
-    try {
-      await apiFetch(token, "/tracking/toggle", {
-        method: "POST",
-        body: JSON.stringify({ routine_type: rtype, step_order: order, completed: newVal }),
-      });
-    } catch {
-      setTracking((p) => ({ ...p, [key]: !newVal }));
-    }
-  };
+  if (!token) return;
+
+  const key = `${rtype}_${order}`;
+  const newVal = !tracking[key];
+
+  setTracking((p) => ({ ...p, [key]: newVal }));
+
+  try {
+    await apiFetch(token, "/tracking/toggle", {
+      method: "POST",
+      body: JSON.stringify({
+        routine_type: rtype,
+        step_order: order,
+        completed: newVal,
+      }),
+    });
+  } catch {
+    setTracking((p) => ({ ...p, [key]: !newVal }));
+  }
+};
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>;
