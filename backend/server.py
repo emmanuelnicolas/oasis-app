@@ -399,7 +399,12 @@ async def reset_password(payload: ResetPasswordRequest):
             detail="Lien invalide"
         )
 
-    if token_doc["expires_at"] < now_utc():
+    expires_at = token_doc["expires_at"]
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < now_utc():
         raise HTTPException(
             status_code=400,
             detail="Lien expiré"
