@@ -13,6 +13,9 @@ import bcrypt
 import jwt
 import httpx
 import hashlib
+import secrets
+import resend
+from datetime import timedelta
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -38,6 +41,17 @@ security = HTTPBearer()
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+APP_RESET_URL = os.environ.get(
+    "APP_RESET_URL",
+    "oasis://reset-password"
+)
+
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+    print("RESEND CONFIGURED:", bool(RESEND_API_KEY))
+    
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
@@ -78,6 +92,14 @@ class SkinProfile(BaseModel):
 
 class GoogleSessionRequest(BaseModel):
     session_id: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str   
 
 class RoutineStep(BaseModel):
     order: int
@@ -295,6 +317,128 @@ async def logout(authorization: Optional[str] = Header(None)):
         token = authorization[7:].strip()
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
+    
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    user = await db.users.find_one({
+        "email": payload.email.lower()
+    })
+
+    generic_message = {
+        "message": "Si un compte existe, un email sera envoyé."
+    }
+
+    if not user:
+        return generic_message
+
+    reset_token = secrets.token_urlsafe(32)
+    reset_link = f"{APP_RESET_URL}?token={reset_token}"
+    print("RESET LINK:", reset_link)
+
+    await db.password_reset_tokens.insert_one({
+        "token": reset_token,
+        "user_id": user["user_id"],
+        "email": payload.email.lower(),
+        "expires_at": now_utc() + timedelta(minutes=30),
+        "used": False,
+        "created_at": now_utc()
+    })
+
+    try:
+        resend.Emails.send({
+            "from": "OASIS <onboarding@resend.dev>",
+            "to": [payload.email.lower()],
+            "subject": "Réinitialisation de votre mot de passe OASIS",
+            "html": f"""
+  <h2>Réinitialisation du mot de passe</h2>
+
+  <p>Vous avez demandé à réinitialiser votre mot de passe OASIS.</p>
+
+  <p>
+    <a href="{reset_link}">Réinitialiser mon mot de passe</a>
+  </p>
+
+  <p>Si le bouton ne fonctionne pas, copiez ce lien :</p>
+
+  <p>{reset_link}</p>
+
+  <p>Ce lien expire dans 30 minutes.</p>
+
+  <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+""",
+"text": f"""
+Réinitialisation du mot de passe OASIS
+
+Copiez ce lien dans votre navigateur/appareil :
+
+{reset_link}
+
+Ce lien expire dans 30 minutes.
+"""
+        })
+    except Exception:
+        logger.exception("Password reset email error")
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible d'envoyer l'email pour le moment."
+        )
+
+    return generic_message
+    
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+
+    token_doc = await db.password_reset_tokens.find_one({
+        "token": payload.token,
+        "used": False
+    })
+
+    if not token_doc:
+        raise HTTPException(
+            status_code=400,
+            detail="Lien invalide"
+        )
+
+    if token_doc["expires_at"] < now_utc():
+        raise HTTPException(
+            status_code=400,
+            detail="Lien expiré"
+        )
+
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Minimum 8 caractères"
+        )
+
+    await db.users.update_one(
+        {
+            "user_id": token_doc["user_id"]
+        },
+        {
+            "$set": {
+                "password_hash": hash_password(
+                    payload.new_password
+                )
+            }
+        }
+    )
+
+    await db.password_reset_tokens.update_one(
+        {
+            "token": payload.token
+        },
+        {
+            "$set": {
+                "used": True,
+                "used_at": now_utc()
+            }
+        }
+    )
+
+    return {
+        "success": True
+    }
 
 
 # ---------- Profile ----------

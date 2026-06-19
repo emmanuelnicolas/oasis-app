@@ -34,9 +34,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchMe = useCallback(async (t: string) => {
-    const res = await fetch(`${API}/auth/me`, {
-      headers: { Authorization: `Bearer ${t}` },
-    });
+  
+
+  const res = await fetch(`${API}/auth/me`, {
+    headers: { Authorization: `Bearer ${t}` },
+  });
+
     if (!res.ok) throw new Error("auth_failed");
     const u = await res.json();
     setUser(u);
@@ -123,16 +126,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (token) {
-      await fetch(`${API}/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
-    await AsyncStorage.removeItem(TOKEN_KEY);
-    setToken(null);
-    setUser(null);
-  };
+	const currentToken = token;
+
+  await AsyncStorage.removeItem(TOKEN_KEY);
+  setToken(null);
+  setUser(null);
+
+  if (currentToken) {
+    fetch(`${API}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${currentToken}` },
+    }).catch(() => {});
+  }
+};
 
   const refreshUser = async () => {
     if (token) await fetchMe(token);
@@ -156,6 +162,10 @@ export const apiFetch = async (
   path: string,
   options: RequestInit = {}
 ) => {
+  if (!token) {
+  return null;
+}
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),

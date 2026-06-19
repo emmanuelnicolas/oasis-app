@@ -148,7 +148,14 @@ export default function Index() {
               secureTextEntry
             />
           </View>
-
+		{mode === "login" && (
+			<TouchableOpacity
+				onPress={() => router.push("/forgot-password")}
+				style={{ alignSelf: "flex-end", marginBottom: spacing.md }}
+			>
+				<Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+				</TouchableOpacity>
+		)}
           {error && <Text style={styles.error} testID="auth-error">{error}</Text>}
 
           <TouchableOpacity
@@ -263,4 +270,10 @@ const styles = StyleSheet.create({
   toggleText: { color: colors.textSecondary, fontSize: 14 },
   error: { color: colors.error, fontSize: 14, marginTop: spacing.xs, textAlign: "center" },
   demoText: { color: colors.secondary, fontSize: 13, textAlign: "center", textDecorationLine: "underline" },
+  
+  forgotText: {
+  color: colors.primary,
+  fontSize: 13,
+  fontWeight: "500",
+},
 });
