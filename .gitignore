@@ -88,3 +88,19 @@ credentials.json
 *.pem
 *.key
 .credentials
+# Expo / Metro cache
+frontend/.metro-cache/
+frontend/.expo/
+
+# Dependencies
+frontend/node_modules/
+backend/__pycache__/
+
+# Env files
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Logs
+*.log
