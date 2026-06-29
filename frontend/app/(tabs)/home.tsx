@@ -21,6 +21,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+  const start = Date.now();
   if (!token) {
     setLoading(false);
     setRefreshing(false);
@@ -39,6 +40,14 @@ export default function Home() {
     setTracking((t && t.completed) || {});
     setTip(s);
     setStats(st);
+	console.log(
+		"Temps chargement Home :",
+		Date.now() - start,
+		"ms"
+	);
+
+	console.log("Routine chargée :", Object.keys(r || {}).length);
+	console.log("Tracking aujourd'hui :", Object.keys((t && t.completed) || {}).length);
   } catch (e) {
     console.log("home load error", e);
   } finally {
@@ -51,6 +60,7 @@ export default function Home() {
 
   const toggleStep = async (rtype: string, order: number) => {
   if (!token) return;
+  const start = Date.now();
 
   const key = `${rtype}_${order}`;
   const newVal = !tracking[key];
@@ -58,15 +68,22 @@ export default function Home() {
   setTracking((p) => ({ ...p, [key]: newVal }));
 
   try {
-    await apiFetch(token, "/tracking/toggle", {
-      method: "POST",
-      body: JSON.stringify({
-        routine_type: rtype,
-        step_order: order,
-        completed: newVal,
-      }),
-    });
-  } catch {
+  await apiFetch(token, "/tracking/toggle", {
+    method: "POST",
+    body: JSON.stringify({
+      routine_type: rtype,
+      step_order: order,
+      completed: newVal,
+    }),
+  });
+
+  console.log(
+    "Temps validation étape routine :",
+    Date.now() - start,
+    "ms"
+  );
+
+} catch {
     setTracking((p) => ({ ...p, [key]: !newVal }));
   }
 };

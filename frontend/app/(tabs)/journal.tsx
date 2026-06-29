@@ -78,6 +78,7 @@ const insights = [
 ].filter(Boolean);
 
 const load = useCallback(async () => {
+const start = Date.now();
   try {
    
     const [
@@ -93,9 +94,27 @@ const load = useCallback(async () => {
     ]);
 
     setEntries(e || []);
-    setRecentProducts(products || []);
-    setPendingFeedback(feedback || []);
-    setLearnings(learningData);
+
+console.log(
+  "Nombre d'entrées Journal chargées :",
+  e?.length || 0
+);
+
+setRecentProducts(products || []);
+
+setPendingFeedback(feedback || []);
+
+console.log(
+  "Nombre de feedbacks en attente :",
+  feedback?.length || 0
+);
+
+setLearnings(learningData);
+	console.log(
+	"Temps chargement Journal :",
+	Date.now() - start,
+	"ms"
+	);
 
   } finally {
     setLoading(false);
@@ -130,7 +149,9 @@ const load = useCallback(async () => {
   };
 
   const save = async () => {
+  const start = Date.now();
   setSaving(true);
+  
 
   try {
     await apiFetch(token, "/skin/tracking", {
@@ -160,16 +181,28 @@ const load = useCallback(async () => {
     setAnalysis(null);
 	setSelectedProducts([]);
 
-    await load();
+	Alert.alert(
+	 "Journal enregistré",
+	 "Votre suivi peau a bien été sauvegardé."
+	);
+
+	await load();
+	
+	console.log(
+  "Temps sauvegarde Journal :",
+  Date.now() - start,
+  "ms"
+);
   } catch (e: any) {
     Alert.alert("Erreur", e.message);
   } finally {
     setSaving(false);
   }
 };
-
+	
   const analyze = async () => {
     if (!pickedImage) return;
+	const start = Date.now();
     setAnalyzing(true);
     try {
       const result = await apiFetch(token, "/skin/analyze", {
@@ -177,6 +210,12 @@ const load = useCallback(async () => {
         body: JSON.stringify({ image_base64: pickedImage }),
       });
       setAnalysis(result);
+	  
+	  console.log(
+		 "Temps analyse selfie IA :",
+		  Date.now() - start,
+		 "ms"
+	  );
     } catch (e: any) {
       Alert.alert("Erreur d'analyse", e.message);
     } finally {
