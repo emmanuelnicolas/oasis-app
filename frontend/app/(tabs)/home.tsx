@@ -1,115 +1,56 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth, apiFetch } from "../../src/auth";
+import { useAuth } from "../../src/auth";
 import { colors, fonts, radius, spacing } from "../../src/theme";
+import { useHome } from "../../src/hooks/useHome";
 
-type Step = { order: number; name: string; product_type: string; instructions: string; benefits: string };
-type Routine = { routine_id: string; type: string; title: string; description: string; steps: Step[] };
 
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, token } = useAuth();
-  const [routines, setRoutines] = useState<{ [k: string]: Routine }>({});
-  const [tracking, setTracking] = useState<{ [k: string]: boolean }>({});
-  const [tip, setTip] = useState<{ season: string; tip_of_day: string } | null>(null);
-  const [stats, setStats] = useState<{ streak: number; total_days: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-  const start = Date.now();
-  if (!token) {
-    setLoading(false);
-    setRefreshing(false);
-    return;
-  }
 
-  try {
-    const [r, t, s, st] = await Promise.all([
-      apiFetch(token, "/routines"),
-      apiFetch(token, "/tracking/today"),
-      apiFetch(token, "/tips/seasonal"),
-      apiFetch(token, "/tracking/stats"),
-    ]);
-
-    setRoutines(r || {});
-    setTracking((t && t.completed) || {});
-    setTip(s);
-    setStats(st);
-	console.log(
-		"Temps chargement Home :",
-		Date.now() - start,
-		"ms"
-	);
-
-	console.log("Routine chargée :", Object.keys(r || {}).length);
-	console.log("Tracking aujourd'hui :", Object.keys((t && t.completed) || {}).length);
-  } catch (e) {
-    console.log("home load error", e);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, [token]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const toggleStep = async (rtype: string, order: number) => {
-  if (!token) return;
-  const start = Date.now();
-
-  const key = `${rtype}_${order}`;
-  const newVal = !tracking[key];
-
-  setTracking((p) => ({ ...p, [key]: newVal }));
-
-  try {
-  await apiFetch(token, "/tracking/toggle", {
-    method: "POST",
-    body: JSON.stringify({
-      routine_type: rtype,
-      step_order: order,
-      completed: newVal,
-    }),
-  });
-
-  console.log(
-    "Temps validation étape routine :",
-    Date.now() - start,
-    "ms"
-  );
-
-} catch {
-    setTracking((p) => ({ ...p, [key]: !newVal }));
-  }
-};
+  const {
+  tracking,
+  tip,
+  stats,
+  loading,
+  refreshing,
+  greeting,
+  focusType,
+  focusRoutine,
+  completedCount,
+  totalSteps,
+  startRefreshing,
+  toggleStep,
+} = useHome(token);
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>;
   }
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bonjour" : "Bonsoir";
-  const focusType = hour < 17 ? "matin" : "soir";
-  const focusRoutine = routines[focusType];
-	const completedCount = focusRoutine
-		? focusRoutine.steps.filter((step) => {
-		const key = `${focusType}_${step.order}`;
-		return !!tracking[key];
-    }).length
-  : 0;
-
-  const totalSteps = focusRoutine?.steps.length || 0;
   return (
     <ScrollView
-      style={{ backgroundColor: colors.bg }}
-      contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxl }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
-    >
+  style={{ backgroundColor: colors.bg }}
+  contentContainerStyle={[
+    styles.scroll,
+    {
+      paddingTop: insets.top + spacing.md,
+      paddingBottom: spacing.xxl,
+    },
+  ]}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={startRefreshing}
+      tintColor={colors.primary}
+    />
+  }
+>
       <View style={styles.header}>
   <View>
     <Text style={styles.hello}>{greeting},</Text>
