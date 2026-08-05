@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { apiFetch } from "../auth";
-import type { JournalEntry } from "../types/journal";
+import type {
+  JournalEntry,
+  SkinAnalysis,
+} from "../types/journal";
 
 export function useJournal(token: string | null) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -21,7 +24,8 @@ export function useJournal(token: string | null) {
 
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [analysis, setAnalysis] =
+  useState<SkinAnalysis | null>(null);
 
   const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);

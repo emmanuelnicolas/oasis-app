@@ -21,10 +21,11 @@ export const fonts = {
 };
 
 export const radius = {
+  md: 16,
   card: 24,
-  button: 999,
-  input: 16,
-  image: 32,
+  button: 12,
+  input: 12,
+  image: 16,
 };
 
 export const spacing = {

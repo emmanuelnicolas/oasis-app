@@ -5,12 +5,58 @@ import { Platform } from "react-native";
 
 export const API = process.env.EXPO_PUBLIC_BACKEND_URL || "https://oasis-backend-ia5h.onrender.com/api";
 
+export type Subscription = {
+  plan: "free" | "premium" | "founder";
+  status:
+    | "active"
+    | "trialing"
+    | "expired"
+    | "canceled";
+
+  started_at?: string | null;
+  expires_at?: string | null;
+  trial_ends_at?: string | null;
+
+  provider?: string | null;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
+};
+
+export type AccessSummary = {
+  subscription: Subscription;
+  plan: "free" | "premium" | "founder";
+  is_premium: boolean;
+
+  limits: {
+    product_analyses_per_day?: number | null;
+    selfie_analyses_per_month?: number | null;
+    coach_messages_per_day?: number | null;
+    journal_history_days?: number | null;
+    photo_comparisons_per_month?: number | null;
+  };
+
+  features: {
+    advanced_formula?: boolean;
+    marketing_analysis?: boolean;
+    synergy_analysis?: boolean;
+    full_personalized_learning?: boolean;
+    long_term_charts?: boolean;
+    full_history?: boolean;
+    advanced_photo_comparison?: boolean;
+    smart_notifications?: boolean;
+    report_export?: boolean;
+  };
+};
+
 export type SkinUser = {
   user_id: string;
   email: string;
   name: string;
   picture?: string | null;
   has_profile: boolean;
+
+  subscription?: Subscription;
+  access?: AccessSummary;
 };
 
 type AuthCtx = {

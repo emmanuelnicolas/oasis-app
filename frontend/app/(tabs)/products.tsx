@@ -10,6 +10,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth, apiFetch } from "../../src/auth";
 import { colors, fonts, radius, spacing } from "../../src/theme";
 import Compare from "../../src/Compare";
+import { IngredientIntelligenceV2 } from "../../src/components/products/IngredientIntelligenceV2";
+
+import type {
+  FormulaAnalysis,
+  MarketingAnalysis,
+  SynergyAnalysis,
+} from "../../src/types/productIntelligence";
 
 type Ingredient = { name: string; role: string; flag: "green" | "orange" | "red"; note: string };
 
@@ -34,7 +41,11 @@ type ProfileMatch = {
   concerns_match: string[];
   avoid_reasons: string[];
 };
-
+type Risk = {
+  type: string;
+  severity: "faible" | "moyen" | "fort" | string;
+  description: string;
+};
 type Analysis = {
   analysis_id: string;
   product_name: string;
@@ -50,6 +61,10 @@ type Analysis = {
   profile_match?: ProfileMatch;
   disclaimer?: string;
   created_at: string;
+  formula_analysis?: FormulaAnalysis;
+  marketing_claims?: string[];
+  marketing_analysis?: MarketingAnalysis;
+  synergy_analysis?: SynergyAnalysis;
 };
 
 const flagColor = (f: string) =>
@@ -71,6 +86,10 @@ export default function Products() {
 
   const [name, setName] = useState("");
   const [inci, setInci] = useState("");
+  const [
+  marketingClaimsText,
+  setMarketingClaimsText,
+] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [unreadable, setUnreadable] = useState<string | null>(null);
@@ -96,9 +115,13 @@ export default function Products() {
     }
   }, [params.open, router]);
 
-  const resetComposer = () => {
-    setName(""); setInci(""); setImage(null); setUnreadable(null);
-  };
+const resetComposer = () => {
+  setName("");
+  setInci("");
+  setMarketingClaimsText("");
+  setImage(null);
+  setUnreadable(null);
+};
 
   const pickPhoto = async () => {
     if (Platform.OS !== "web") {
@@ -159,13 +182,20 @@ export default function Products() {
     setAnalyzing(true);
     setUnreadable(null);
     try {
+const marketingClaims =
+  marketingClaimsText
+    .split(/\n|;/)
+    .map((claim) => claim.trim())
+    .filter(Boolean)
+    .slice(0, 10);
       const result = await apiFetch(token, "/products/analyze", {
         method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          image_base64: image || "",
-          ingredients_text: inci.trim(),
-        }),
+body: JSON.stringify({
+  name: name.trim(),
+  image_base64: image || "",
+  ingredients_text: inci.trim(),
+  marketing_claims: marketingClaims,
+}),
       });
       if (result && result.unreadable) {
         setUnreadable(result.message || "Liste illisible. Collez le texte INCI.");
@@ -332,7 +362,39 @@ export default function Products() {
                 placeholderTextColor={colors.textDisabled}
                 multiline
               />
+<Text
+  style={[
+    styles.label,
+    {
+      marginTop: spacing.md,
+    },
+  ]}
+>
+  Promesses marketing (optionnel)
+</Text>
 
+<TextInput
+  testID="marketing-claims-input"
+  style={[
+    styles.input,
+    styles.claimsInput,
+  ]}
+  value={marketingClaimsText}
+  onChangeText={setMarketingClaimsText}
+  placeholder={
+    "Hydrate pendant 24 h\nRéduit les taches\nAméliore l’éclat"
+  }
+  placeholderTextColor={
+    colors.textDisabled
+  }
+  multiline
+  textAlignVertical="top"
+/>
+
+<Text style={styles.claimsHint}>
+  Une promesse par ligne. OASIS vérifiera si
+  la formule semble réellement la soutenir.
+</Text>
               {unreadable && (
                 <View style={styles.warnBox} testID="unreadable-warn">
                   <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
@@ -507,6 +569,17 @@ export default function Products() {
     </View>
   </View>
 )}
+<IngredientIntelligenceV2
+  formulaAnalysis={
+    viewer.formula_analysis
+  }
+  marketingAnalysis={
+    viewer.marketing_analysis
+  }
+  synergyAnalysis={
+    viewer.synergy_analysis
+  }
+/>
               {/* Compatibility */}
               {viewer.compatibility && (
                 <View style={styles.section}>
@@ -925,5 +998,16 @@ profileMatchText: {
   color: colors.textPrimary,
   lineHeight: 21,
   marginBottom: spacing.sm,
+},
+claimsInput: {
+  minHeight: 96,
+},
+
+claimsHint: {
+  fontSize: 12,
+  lineHeight: 17,
+  color: colors.textSecondary,
+  marginTop: -spacing.sm,
+  marginBottom: spacing.md,
 },
 });

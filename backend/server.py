@@ -21,7 +21,16 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta, date
 from google import genai
-
+from oasis_core.learning_engine import compute_user_learnings
+from oasis_core.formula_engine import analyze_formula
+from oasis_core.marketing_engine import analyze_marketing_claims
+from oasis_core.synergy_engine import analyze_synergies
+from oasis_core.access_control import (
+    build_access_summary,
+    can_analyze_product,
+    can_analyze_selfie,
+    default_subscription,
+)
 
 
 # from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
@@ -76,6 +85,14 @@ class User(BaseModel):
     picture: Optional[str] = None
     has_profile: bool = False
     created_at: datetime
+
+    subscription: Dict[str, Any] = Field(
+        default_factory=default_subscription
+    )
+
+    access: Dict[str, Any] = Field(
+        default_factory=dict
+    )
 
 class AuthResponse(BaseModel):
     token: str
@@ -143,7 +160,7 @@ class SkinTrackingRequest(BaseModel):
     note: Optional[str] = ""
     image_base64: Optional[str] = ""
     
-    linked_products: Optional[list] = []
+    linked_products: List[str] = Field(default_factory=list)
 
 class SkinAnalysisRequest(BaseModel):
     image_base64: str
@@ -153,6 +170,7 @@ class ProductAnalysisRequest(BaseModel):
     name: Optional[str] = ""
     image_base64: Optional[str] = ""
     ingredients_text: Optional[str] = ""
+    marketing_claims: List[str] = Field(default_factory=list)
     
 class ProductOutcomeFeedbackRequest(BaseModel):
     analysis_id: str
@@ -203,14 +221,29 @@ async def get_current_user(credentials=Security(security)) -> Dict[str, Any]:
     raise HTTPException(status_code=401, detail="Token invalide ou expiré")
 
 
-def serialize_user(doc: Dict[str, Any]) -> User:
+def serialize_user(
+    doc: Dict[str, Any]
+) -> User:
+    access_summary = build_access_summary(
+        doc
+    )
+
     return User(
         user_id=doc["user_id"],
         email=doc["email"],
         name=doc.get("name", ""),
         picture=doc.get("picture"),
-        has_profile=bool(doc.get("skin_profile")),
-        created_at=doc.get("created_at", now_utc()),
+        has_profile=bool(
+            doc.get("skin_profile")
+        ),
+        created_at=doc.get(
+            "created_at",
+            now_utc(),
+        ),
+        subscription=access_summary[
+            "subscription"
+        ],
+        access=access_summary,
     )
 
 
@@ -244,6 +277,7 @@ async def signup(payload: SignupRequest):
         "password_hash": hash_password(payload.password),
         "picture": None,
         "skin_profile": None,
+        "subscription": default_subscription(),
         "created_at": now_utc(),
     }
     await db.users.insert_one(user)
@@ -293,6 +327,7 @@ async def google_session(payload: GoogleSessionRequest):
             "name": data.get("name", ""),
             "picture": data.get("picture"),
             "skin_profile": None,
+            "subscription": default_subscription(),
             "created_at": now_utc(),
         }
         await db.users.insert_one(dict(user_doc))
@@ -306,10 +341,146 @@ async def google_session(payload: GoogleSessionRequest):
     return AuthResponse(token=data["session_token"], user=serialize_user(user_doc))
 
 
-@api_router.get("/auth/me", response_model=User)
-async def auth_me(user=Depends(get_current_user)):
+@api_router.get(
+    "/auth/me",
+    response_model=User,
+)
+async def auth_me(
+    user=Depends(get_current_user)
+):
+    if not user.get("subscription"):
+        subscription = (
+            default_subscription()
+        )
+
+        await db.users.update_one(
+            {
+                "user_id": user["user_id"],
+            },
+            {
+                "$set": {
+                    "subscription": (
+                        subscription
+                    )
+                }
+            },
+        )
+
+        user["subscription"] = (
+            subscription
+        )
+
     return serialize_user(user)
 
+@api_router.get("/access/usage")
+async def get_access_usage(
+    user=Depends(get_current_user),
+):
+    now = now_utc()
+    today = now.date().isoformat()
+
+    month_start = datetime(
+        year=now.year,
+        month=now.month,
+        day=1,
+        tzinfo=timezone.utc,
+    )
+
+    if now.month == 12:
+        next_month_start = datetime(
+            year=now.year + 1,
+            month=1,
+            day=1,
+            tzinfo=timezone.utc,
+        )
+    else:
+        next_month_start = datetime(
+            year=now.year,
+            month=now.month + 1,
+            day=1,
+            tzinfo=timezone.utc,
+        )
+
+    product_analyses_used = (
+        await db.product_analysis_usage
+        .count_documents({
+            "user_id": user["user_id"],
+            "created_at_day": today,
+        })
+    )
+
+    selfie_analyses_used = (
+        await db.skin_analyses
+        .count_documents({
+            "user_id": user["user_id"],
+            "created_at": {
+                "$gte": month_start,
+                "$lt": next_month_start,
+            },
+        })
+    )
+
+    access = build_access_summary(user)
+
+    limits = access.get("limits", {})
+
+    product_limit = limits.get(
+        "product_analyses_per_day"
+    )
+
+    selfie_limit = limits.get(
+        "selfie_analyses_per_month"
+    )
+
+    def compute_remaining(
+        limit: Optional[int],
+        used: int,
+    ) -> Optional[int]:
+        if limit is None:
+            return None
+
+        return max(
+            0,
+            limit - used,
+        )
+
+    return {
+        "plan": access.get(
+            "plan",
+            "free",
+        ),
+        "is_premium": access.get(
+            "is_premium",
+            False,
+        ),
+        "subscription": access.get(
+            "subscription"
+        ),
+        "usage": {
+            "product_analyses": {
+                "period": "day",
+                "used": product_analyses_used,
+                "limit": product_limit,
+                "remaining": compute_remaining(
+                    product_limit,
+                    product_analyses_used,
+                ),
+            },
+            "selfie_analyses": {
+                "period": "month",
+                "used": selfie_analyses_used,
+                "limit": selfie_limit,
+                "remaining": compute_remaining(
+                    selfie_limit,
+                    selfie_analyses_used,
+                ),
+            },
+        },
+        "features": access.get(
+            "features",
+            {},
+        ),
+    }
 
 @api_router.post("/auth/logout")
 async def logout(authorization: Optional[str] = Header(None)):
@@ -653,38 +824,214 @@ async def get_routines(user=Depends(get_current_user)):
 
 # ---------- AI Skin Analysis (Vision) ----------
 @api_router.post("/skin/analyze")
-async def analyze_skin(payload: SkinAnalysisRequest, user=Depends(get_current_user)):
+async def analyze_skin(
+    payload: SkinAnalysisRequest,
+    user=Depends(get_current_user)
+):
     if not payload.image_base64:
-        raise HTTPException(status_code=400, detail="Image requise")
+        raise HTTPException(
+            status_code=400,
+            detail="Image requise"
+        )
+    selfie_access = (
+        await check_monthly_selfie_limit(
+            user
+        )
+    )
+
+    if not genai_client:
+        raise HTTPException(
+            status_code=503,
+            detail="Analyse IA temporairement indisponible"
+        )
 
     img_b64 = payload.image_base64
+
     if img_b64.startswith("data:"):
         img_b64 = img_b64.split(",", 1)[1]
 
-    response = """
-    {
-      "skin_type": "indéterminé",
-      "concerns": [],
-      "summary": "Analyse IA désactivée en local temporairement."
-    }
-    """
+    profile = user.get("skin_profile") or {}
+
+    profile_text = (
+        f"Type de peau déclaré : "
+        f"{profile.get('skin_type', 'non renseigné')}\n"
+        f"Sensibilité : "
+        f"{profile.get('sensitivity', 'non renseignée')}\n"
+        f"Préoccupations : "
+        f"{', '.join(profile.get('concerns', [])) or 'aucune'}"
+    )
+
+    prompt = f"""
+Tu es une experte skincare spécialisée dans l'observation visuelle de la peau.
+
+Profil déclaré par l'utilisateur :
+{profile_text}
+
+Analyse uniquement ce qui est raisonnablement visible sur la photo.
+
+Tu dois :
+1. Estimer le type de peau visible.
+2. Identifier les préoccupations visibles possibles.
+3. Décrire l'état général de la peau.
+4. Donner des recommandations simples et prudentes.
+5. Ne jamais poser de diagnostic médical.
+6. Ne jamais affirmer avec certitude une maladie ou une affection.
+7. Si la photo est floue, sombre ou inexploitable, l'indiquer clairement.
+8. Tenir compte du profil déclaré sans le considérer comme une vérité absolue.
+
+Réponds uniquement en JSON valide.
+
+Format exact :
+
+{{
+  "unreadable": false,
+  "skin_type": "sèche|grasse|mixte|normale|sensible|indéterminée",
+  "concerns": [
+    "déshydratation",
+    "rougeurs",
+    "boutons",
+    "texture",
+    "pores",
+    "taches",
+    "manque d'éclat"
+  ],
+  "summary": "Résumé clair et prudent en 2 ou 3 phrases.",
+  "observations": [
+    {{
+      "label": "string",
+      "severity": "faible|modérée|marquée",
+      "description": "string"
+    }}
+  ],
+  "recommendations": [
+    "Conseil simple et prudent"
+  ],
+  "confidence": 0,
+  "disclaimer": "Analyse indicative basée sur une photo, ne remplace pas un avis dermatologique."
+}}
+"""
 
     try:
-        data = parse_json_from_text(response)
+        gemini_response = genai_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                prompt,
+                {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": img_b64
+                    }
+                }
+            ]
+        )
+
+        response_text = gemini_response.text or ""
+
+        data = parse_json_from_text(
+            response_text
+        )
+
     except Exception:
-        logger.error(f"Failed parsing skin analysis: {response[:300]}")
-        raise HTTPException(status_code=500, detail="Erreur analyse, réessayez avec une autre photo")
+        logger.exception(
+            "Gemini skin analysis error"
+        )
 
-    await db.skin_analyses.insert_one({
-        "analysis_id": f"sa_{uuid.uuid4().hex[:12]}",
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Analyse temporairement indisponible. "
+                "Réessayez avec une photo nette et bien éclairée."
+            )
+        )
+
+    result = {
+        "unreadable": bool(
+            data.get("unreadable", False)
+        ),
+        "skin_type": (
+            data.get("skin_type")
+            or "indéterminée"
+        ),
+        "concerns": data.get(
+            "concerns",
+            []
+        ),
+        "summary": (
+            data.get("summary")
+            or "Analyse non concluante."
+        ),
+        "observations": data.get(
+            "observations",
+            []
+        ),
+        "recommendations": data.get(
+            "recommendations",
+            []
+        ),
+        "confidence": max(
+            0,
+            min(
+                int(data.get("confidence", 0)),
+                100
+            )
+        ),
+        "disclaimer": (
+            data.get("disclaimer")
+            or (
+                "Analyse indicative basée sur une photo, "
+                "ne remplace pas un avis dermatologique."
+            )
+        )
+    }
+
+    analysis_doc = {
+        "analysis_id": (
+            f"sa_{uuid.uuid4().hex[:12]}"
+        ),
         "user_id": user["user_id"],
-        "skin_type": data.get("skin_type", ""),
-        "concerns": data.get("concerns", []),
-        "summary": data.get("summary", ""),
+        **result,
         "created_at": now_utc(),
-    })
+    }
 
-    return data
+    await db.skin_analyses.insert_one(
+        analysis_doc
+    )
+
+    analysis_doc.pop("_id", None)
+
+    analysis_doc["access"] = {
+        "plan": selfie_access.get(
+            "plan",
+            "free",
+        ),
+        "limit": selfie_access.get(
+            "limit"
+        ),
+        "used_before_analysis": (
+            selfie_access.get(
+                "used",
+                0,
+            )
+        ),
+        "remaining_after_analysis": (
+            max(
+                0,
+                (
+                    selfie_access.get(
+                        "remaining",
+                        1,
+                    )
+                    or 1
+                ) - 1,
+            )
+            if selfie_access.get(
+                "remaining"
+            ) is not None
+            else None
+        ),
+    }
+
+    return analysis_doc
 
 
 # ---------- Product Analysis ----------
@@ -1087,6 +1434,70 @@ def analyze_ingredient_conflicts(ingredient_names: List[str]) -> Dict[str, Any]:
         "conflicts": conflicts,
         "conflict_penalty": score_penalty
     }
+def get_formula_ingredient_names(
+    analysis_data: Dict[str, Any],
+    ingredients_text: str = ""
+) -> List[str]:
+    ingredient_names = []
+
+    for ingredient in analysis_data.get(
+        "ingredients",
+        []
+    ):
+        if isinstance(ingredient, dict):
+            name = ingredient.get("name")
+
+            if name:
+                ingredient_names.append(name)
+
+        elif isinstance(ingredient, str):
+            ingredient_names.append(ingredient)
+
+    if ingredient_names:
+        return ingredient_names
+
+    extracted_text = (
+        analysis_data.get(
+            "extracted_ingredients_text"
+        )
+        or ingredients_text
+        or ""
+    )
+
+    return [
+        ingredient.strip()
+        for ingredient in extracted_text.split(",")
+        if ingredient.strip()
+    ]
+    
+def get_marketing_claims(
+    payload_claims: List[str],
+    analysis_data: Optional[Dict[str, Any]] = None
+) -> List[str]:
+    claims = []
+
+    for claim in payload_claims or []:
+        clean_claim = str(claim or "").strip()
+
+        if clean_claim:
+            claims.append(clean_claim)
+
+    if claims:
+        return claims[:10]
+
+    analysis_data = analysis_data or {}
+
+    for claim in analysis_data.get(
+        "marketing_claims",
+        []
+    ):
+        clean_claim = str(claim or "").strip()
+
+        if clean_claim:
+            claims.append(clean_claim)
+
+    return claims[:10]
+    
 def normalize_inci_text(text: str) -> str:
     text = str(text or "").upper()
     text = text.replace("\n", ",")
@@ -1100,19 +1511,113 @@ def make_inci_hash(text: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-async def check_daily_analysis_limit(user_id: str, limit: int = 5):
+async def check_daily_analysis_limit(
+    user: Dict[str, Any],
+) -> Dict[str, Any]:
     today = now_utc().date().isoformat()
 
-    count = await db.product_analysis_usage.count_documents({
-    "user_id": user_id,
-    "created_at_day": today
-})
+    analyses_used_today = (
+        await db.product_analysis_usage
+        .count_documents({
+            "user_id": user["user_id"],
+            "created_at_day": today,
+        })
+    )
 
-    if count >= limit:
+    decision = can_analyze_product(
+        user=user,
+        analyses_used_today=(
+            analyses_used_today
+        ),
+    )
+
+    if not decision.allowed:
+        if decision.upgrade_required:
+            detail = (
+                "Vous avez atteint la limite "
+                f"de {decision.limit} analyses "
+                "produits par jour avec le plan "
+                "gratuit. Passez à OASIS Premium "
+                "pour obtenir davantage d’analyses."
+            )
+        else:
+            detail = (
+                "Limite quotidienne d’analyses "
+                "atteinte. Réessayez demain."
+            )
+
         raise HTTPException(
             status_code=429,
-            detail="Limite quotidienne atteinte. Réessayez demain."
+            detail=detail,
         )
+
+    return decision.to_dict()
+    
+async def check_monthly_selfie_limit(
+    user: Dict[str, Any],
+) -> Dict[str, Any]:
+    now = now_utc()
+
+    month_start = datetime(
+        year=now.year,
+        month=now.month,
+        day=1,
+        tzinfo=timezone.utc,
+    )
+
+    if now.month == 12:
+        next_month_start = datetime(
+            year=now.year + 1,
+            month=1,
+            day=1,
+            tzinfo=timezone.utc,
+        )
+    else:
+        next_month_start = datetime(
+            year=now.year,
+            month=now.month + 1,
+            day=1,
+            tzinfo=timezone.utc,
+        )
+
+    analyses_used_this_month = (
+        await db.skin_analyses.count_documents({
+            "user_id": user["user_id"],
+            "created_at": {
+                "$gte": month_start,
+                "$lt": next_month_start,
+            },
+        })
+    )
+
+    decision = can_analyze_selfie(
+        user=user,
+        analyses_used_this_month=(
+            analyses_used_this_month
+        ),
+    )
+
+    if not decision.allowed:
+        if decision.upgrade_required:
+            detail = (
+                "Vous avez atteint la limite "
+                f"de {decision.limit} analyses selfie "
+                "par mois avec le plan gratuit. "
+                "Passez à OASIS Premium pour obtenir "
+                "davantage d’analyses."
+            )
+        else:
+            detail = (
+                "Limite mensuelle d’analyses selfie "
+                "atteinte."
+            )
+
+        raise HTTPException(
+            status_code=429,
+            detail=detail,
+        )
+
+    return decision.to_dict()
 
 async def get_user_ingredient_preferences(user_id: str) -> Dict[str, int]:
     feedbacks = await db.product_feedback.find(
@@ -1178,7 +1683,11 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
         user["user_id"]
     )
     
-    await check_daily_analysis_limit(user["user_id"], limit=5)
+    analysis_access = (
+        await check_daily_analysis_limit(
+            user
+        )
+    )
 
 
     ingredients_map = await load_ingredients_map()
@@ -1211,6 +1720,80 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
                 "created_at_day": now_utc().date().isoformat(),
                 "created_at": now_utc()
             })
+            cached_ingredient_names = (
+                get_formula_ingredient_names(
+                    cached_result,
+                    payload.ingredients_text
+                )
+            )
+
+            cached_result[
+                "formula_analysis"
+            ] = analyze_formula(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                profile=profile,
+                ingredients_map=ingredients_map
+            )
+            cached_marketing_claims = (
+                get_marketing_claims(
+                    payload.marketing_claims,
+                    cached_result
+                )
+            )
+
+            cached_result[
+                "marketing_claims"
+            ] = cached_marketing_claims
+
+            cached_result[
+                "marketing_analysis"
+            ] = analyze_marketing_claims(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                ingredients_map=ingredients_map,
+                claims=cached_marketing_claims
+            )
+
+            cached_result[
+                "synergy_analysis"
+            ] = analyze_synergies(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                profile=profile,
+                ingredients_map=ingredients_map
+            )
+            cached_result["access"] = {
+                "plan": analysis_access.get(
+                    "plan",
+                    "free",
+                ),
+                "limit": analysis_access.get(
+                    "limit"
+                ),
+                "used_before_analysis": (
+                    analysis_access.get("used", 0)
+                ),
+                "remaining_after_analysis": (
+                    max(
+                        0,
+                        (
+                            analysis_access.get(
+                                "remaining",
+                                1,
+                            )
+                            or 1
+                        ) - 1,
+                    )
+                    if analysis_access.get(
+                        "remaining"
+                    ) is not None
+                    else None
+                ),
+            }
             return cached_result
 
     profile_text = (
@@ -1229,6 +1812,9 @@ Profil utilisateur :
 Nom du produit :
 {payload.name or "Produit analysé"}
 
+Promesses marketing fournies :
+{", ".join(payload.marketing_claims) or "Aucune promesse fournie"}
+
 Texte ingrédients fourni :
 {payload.ingredients_text or "Aucun texte fourni"}
 
@@ -1243,6 +1829,7 @@ Mission :
 5. Donner une décision claire et honnête.
 6. Ne sois pas alarmiste.
 7. Ne donne jamais de diagnostic médical.
+8. Identifier les principales promesses marketing visibles ou fournies.
 
 Règles :
 - Si peau sensible : surveille parfum, huiles essentielles, alcool dénaturé, exfoliants forts.
@@ -1266,7 +1853,9 @@ Format exact :
   "product_category": "moisturizer|serum|cleanser|spf|eye_care|mask|exfoliant|skincare",
   "score": 0,
   "extracted_ingredients_text": "string",
-
+  "marketing_claims": [
+    "Promesse marketing détectée ou fournie"
+    ],
   "score_explanation": {{
     "summary": "Explique en 1 phrase pourquoi ce score est donné selon le profil utilisateur.",
     "positives": [
@@ -1377,7 +1966,29 @@ Format exact :
             raw_ingredients,
             ingredients_map
         )
+        formula_analysis = analyze_formula(
+            ingredient_names=raw_ingredients,
+            profile=profile,
+            ingredients_map=ingredients_map
+        )
+        marketing_claims = get_marketing_claims(
+            payload.marketing_claims
+        )
 
+        marketing_analysis = (
+            analyze_marketing_claims(
+                ingredient_names=raw_ingredients,
+                ingredients_map=ingredients_map,
+                claims=marketing_claims
+            )
+            
+        )
+        synergy_analysis = analyze_synergies(
+            ingredient_names=raw_ingredients,
+            profile=profile,
+            ingredients_map=ingredients_map
+        )
+        
         fallback_doc = {
             "analysis_id": f"pa_{uuid.uuid4().hex[:12]}",
             "user_id": user["user_id"],
@@ -1400,6 +2011,14 @@ Format exact :
             "alternatives": [],
             "ingredient_analysis": ingredient_analysis,
             "formula_positioning": formula_positioning,
+            "formula_analysis": formula_analysis,
+            "marketing_claims":
+                marketing_claims,
+
+            "marketing_analysis":
+                marketing_analysis,
+            "synergy_analysis":
+                synergy_analysis,
             "recommended_products": [],
             "from_fallback": True,
             "created_at": now_utc(),
@@ -1414,6 +2033,34 @@ Format exact :
             "created_at_day": now_utc().date().isoformat(),
             "created_at": now_utc()
         })
+        fallback_doc["access"] = {
+            "plan": analysis_access.get(
+                "plan",
+                "free",
+           ),
+            "limit": analysis_access.get(
+                "limit"
+           ),
+            "used_before_analysis": (
+                analysis_access.get("used", 0)
+           ),
+            "remaining_after_analysis": (
+                max(
+                    0,
+                    (
+                        analysis_access.get(
+                            "remaining",
+                            1,
+                        )
+                        or 1
+                    ) - 1,
+                )
+                if analysis_access.get(
+                    "remaining"
+                ) is not None
+                else None
+            ),
+        }
         return fallback_doc
 
     try:
@@ -1442,20 +2089,109 @@ Format exact :
 
         if cached:
             cached_result = dict(cached["result"])
+
             cached_result["from_cache"] = True
-            cached_result["analysis_id"] = f"pa_{uuid.uuid4().hex[:12]}"
+            cached_result["analysis_id"] = (
+                f"pa_{uuid.uuid4().hex[:12]}"
+            )
             cached_result["user_id"] = user["user_id"]
             cached_result["created_at"] = now_utc()
-            cached_result["created_at_day"] = now_utc().date().isoformat()
+            cached_result["created_at_day"] = (
+                now_utc().date().isoformat()
+            )
 
-            await db.product_analyses.insert_one(cached_result)
+            cached_ingredient_names = (
+                get_formula_ingredient_names(
+                    cached_result,
+                    extracted_text
+                )
+            )
+
+            cached_result[
+                "formula_analysis"
+            ] = analyze_formula(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                profile=profile,
+                ingredients_map=ingredients_map
+            )
+
+            cached_marketing_claims = (
+                get_marketing_claims(
+                    payload.marketing_claims,
+                    cached_result
+                )
+            )
+
+            cached_result[
+                "marketing_claims"
+            ] = cached_marketing_claims
+
+            cached_result[
+                "marketing_analysis"
+            ] = analyze_marketing_claims(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                ingredients_map=ingredients_map,
+                claims=cached_marketing_claims
+            )
+
+            cached_result[
+                "synergy_analysis"
+            ] = analyze_synergies(
+                ingredient_names=(
+                    cached_ingredient_names
+                ),
+                profile=profile,
+                ingredients_map=ingredients_map
+            )
+
+            await db.product_analyses.insert_one(
+                cached_result
+            )
+
             cached_result.pop("_id", None)
+
             await db.product_analysis_usage.insert_one({
-                "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
+                "usage_id": (
+                    f"usage_{uuid.uuid4().hex[:12]}"
+                ),
                 "user_id": user["user_id"],
-                "created_at_day": now_utc().date().isoformat(),
+                "created_at_day": (
+                    now_utc().date().isoformat()
+                ),
                 "created_at": now_utc()
             })
+            cached_result["access"] = {
+                "plan": analysis_access.get(
+                    "plan",
+                    "free",
+                ),
+                "limit": analysis_access.get(
+                    "limit"
+                ),
+                "used_before_analysis": (
+                    analysis_access.get("used", 0)
+                ),
+                "remaining_after_analysis": (
+                    max(
+                        0,
+                        (
+                            analysis_access.get(
+                                "remaining",
+                                1,
+                            )
+                            or 1
+                        ) - 1,
+                    )
+                    if analysis_access.get(
+                        "remaining"
+                    ) is not None
+                    else None
+                ),
+            }
             return cached_result
 
     ingredient_source = [
@@ -1470,6 +2206,28 @@ Format exact :
         ingredient_source,
         profile,
         ingredients_map
+    )
+    formula_analysis = analyze_formula(
+        ingredient_names=ingredient_source,
+        profile=profile,
+        ingredients_map=ingredients_map
+    )
+    marketing_claims = get_marketing_claims(
+        payload.marketing_claims,
+        data
+    )
+
+    marketing_analysis = (
+        analyze_marketing_claims(
+            ingredient_names=ingredient_source,
+            ingredients_map=ingredients_map,
+            claims=marketing_claims
+        )
+    )
+    synergy_analysis = analyze_synergies(
+        ingredient_names=ingredient_source,
+        profile=profile,
+        ingredients_map=ingredients_map
     )
 
     matched_ingredients = []
@@ -1516,7 +2274,17 @@ Format exact :
         extracted_text.split(","),
         ingredients_map
     )
+    data["formula_analysis"] = formula_analysis
+    data["marketing_claims"] = (
+        marketing_claims
+    )
 
+    data["marketing_analysis"] = (
+        marketing_analysis
+    )
+    data["synergy_analysis"] = (
+        synergy_analysis
+    )
     data["formula_positioning"] = formula_positioning
     conflict_analysis = analyze_ingredient_conflicts(ingredient_source)
 
@@ -1588,6 +2356,22 @@ Format exact :
         "barrier_risk": data.get("barrier_risk"),
         "profile_match": data.get("profile_match"),
         "ingredient_analysis": data.get("ingredient_analysis"),
+        "formula_analysis":
+            data.get("formula_analysis"),
+        "marketing_claims":
+            data.get(
+                "marketing_claims",
+                []
+            ),
+
+        "marketing_analysis":
+            data.get(
+                "marketing_analysis"
+            ),
+        "synergy_analysis":
+            data.get(
+                "synergy_analysis"
+            ),
         "formula_positioning": data.get("formula_positioning"),
         "conflict_analysis": data.get("conflict_analysis"),
         "recommended_products": data.get("recommended_products", []),
@@ -1596,14 +2380,40 @@ Format exact :
         "created_at": now_utc(),
         "created_at_day": now_utc().date().isoformat(),
         
+        
     }
 
     if cache_key and extracted_text:
+        cache_result = dict(
+            analysis_doc
+        )
+
+        cache_result.pop(
+            "formula_analysis",
+            None
+        )
+        cache_result.pop(
+            "marketing_analysis",
+            None
+        )
+
+        cache_result.pop(
+            "marketing_claims",
+            None
+        )
+        cache_result.pop(
+            "synergy_analysis",
+            None
+        )
         cache_doc = {
             "cache_key": cache_key,
-            "ingredients_text": extracted_text,
-            "product_name": analysis_doc.get("product_name"),
-            "result": analysis_doc,
+            "ingredients_text":
+                extracted_text,
+            "product_name":
+                analysis_doc.get(
+                    "product_name"
+                ),
+            "result": cache_result,
             "created_at": now_utc(),
         }
 
@@ -1791,10 +2601,44 @@ async def pending_feedback(
             "linked_products",
             []
         ):
+            if isinstance(product, str):
+                product_doc = await db.product_analyses.find_one(
+                    {
+                        "user_id": user["user_id"],
+                        "analysis_id": product
+                    },
+                    {
+                        "_id": 0,
+                        "analysis_id": 1,
+                        "product_name": 1
+                    }
+                )
+
+                if not product_doc:
+                    continue
+
+                analysis_id = product_doc["analysis_id"]
+                product_name = (
+                    product_doc.get("product_name")
+                    or "Produit analysé"
+                )
+
+            elif isinstance(product, dict):
+                analysis_id = product.get("analysis_id")
+                product_name = (
+                    product.get("product_name")
+                    or "Produit analysé"
+                )
+
+                if not analysis_id:
+                    continue
+
+            else:
+                continue
 
             existing = await db.product_feedback.find_one({
                 "user_id": user["user_id"],
-                "analysis_id": product["analysis_id"]
+                "analysis_id": analysis_id
             })
 
             if existing:
@@ -1807,216 +2651,75 @@ async def pending_feedback(
 
             pending.append({
                 "tracking_id": tracking["tracking_id"],
-                "analysis_id": product["analysis_id"],
-                "product_name": product["product_name"],
+                "analysis_id": analysis_id,
+                "product_name": product_name,
                 "days_used": days_used
             })
 
-    return pending  
+    return pending 
 @api_router.get("/oasis-learnings")
 async def oasis_learnings(
     user=Depends(get_current_user)
 ):
-    feedbacks = await db.product_feedback.find(
-        {
-            "user_id": user["user_id"]
-        },
-        {
-            "_id": 0
-        }
-    ).to_list(length=100)
-
-    improved_count = 0
-    stable_count = 0
-    worse_count = 0
-
-    for feedback in feedbacks:
-        result = feedback.get("overall_result")
-
-        if result == "improved":
-            improved_count += 1
-        elif result == "stable":
-            stable_count += 1
-        elif result == "worse":
-            worse_count += 1
-
-    insights = []
-
-    if improved_count >= 1:
-        insights.append(
-            "Certains produits semblent avoir un effet positif sur votre peau."
-        )
-
-    if stable_count >= 1:
-        insights.append(
-            "Votre peau semble rester stable avec certains produits."
-        )
-
-    if worse_count >= 1:
-        insights.append(
-            "Certains produits semblent moins bien convenir à votre peau."
-        )
-
-    if len(feedbacks) == 0:
-        insights.append(
-            "OASIS commence à apprendre dès que vous donnez des retours sur vos produits."
-        )
-    ingredient_stats = {}
-
-    for feedback in feedbacks:
-        analysis = await db.product_analyses.find_one(
-            {
-                "user_id": user["user_id"],
-                "analysis_id": feedback.get("analysis_id")
-            },
-            {
-                "_id": 0,
-                "ingredients": 1
-            }
-        )
-
-        if not analysis:
-            continue
-
-        for ingredient in analysis.get("ingredients", []):
-            name = ingredient.get("name")
-
-            if not name:
-                continue
-
-            if name not in ingredient_stats:
-                ingredient_stats[name] = {
-                    "ingredient": name,
-                    "positive": 0,
-                    "neutral": 0,
-                    "negative": 0
-                }
-
-            result = feedback.get("overall_result")
-
-            if result == "improved":
-                ingredient_stats[name]["positive"] += 1
-            elif result == "stable":
-                ingredient_stats[name]["neutral"] += 1
-            elif result == "worse":
-                ingredient_stats[name]["negative"] += 1
-        
-    top_ingredients = sorted(
-        ingredient_stats.values(),
-        key=lambda x: x["positive"] - x["negative"],
-        reverse=True
-    )[:5]
-    tracking_entries = await db.skin_tracking.find(
-        {
-            "user_id": user["user_id"],
-            "linked_products.0": {
-                "$exists": True
-            }
-        },
-        {
-            "_id": 0,
-            "hydration": 1,
-            "glow": 1,
-            "texture": 1,
-            "irritation": 1,
-            "breakouts": 1,
-            "redness": 1,
-            "linked_products": 1
-        }
-    ).to_list(length=100)
-
-    ingredient_effects = {}
-
-    for entry in tracking_entries:
-        linked_products = entry.get("linked_products", [])
-
-        for product in linked_products:
-            analysis = await db.product_analyses.find_one(
-                {
-                    "user_id": user["user_id"],
-                    "analysis_id": product.get("analysis_id")
-                },
-                {
-                    "_id": 0,
-                    "ingredients": 1
-                }
-            )
-
-            if not analysis:
-                continue
-
-            for ingredient in analysis.get("ingredients", []):
-                name = ingredient.get("name")
-
-                if not name:
-                    continue
-
-                if name not in ingredient_effects:
-                    ingredient_effects[name] = {
-                        "ingredient": name,
-                        "count": 0,
-                        "hydration": 0,
-                        "glow": 0,
-                        "texture": 0,
-                        "irritation": 0,
-                        "breakouts": 0,
-                        "redness": 0
-                    }
-
-                ingredient_effects[name]["count"] += 1
-                ingredient_effects[name]["hydration"] += entry.get("hydration", 0)
-                ingredient_effects[name]["glow"] += entry.get("glow", 0)
-                ingredient_effects[name]["texture"] += entry.get("texture", 0)
-                ingredient_effects[name]["irritation"] += entry.get("irritation", 0)
-                ingredient_effects[name]["breakouts"] += entry.get("breakouts", 0)
-                ingredient_effects[name]["redness"] += entry.get("redness", 0)
-
-    ingredient_correlations = []
-
-    for item in ingredient_effects.values():
-        count = item["count"]
-
-        if count == 0:
-            continue
-
-        ingredient_correlations.append({
-            "ingredient": item["ingredient"],
-            "count": count,
-            "avg_hydration": round(item["hydration"] / count, 1),
-            "avg_glow": round(item["glow"] / count, 1),
-            "avg_texture": round(item["texture"] / count, 1),
-            "avg_irritation": round(item["irritation"] / count, 1),
-            "avg_breakouts": round(item["breakouts"] / count, 1),
-            "avg_redness": round(item["redness"] / count, 1)
-        })
-
-    ingredient_correlations = sorted(
-        ingredient_correlations,
-        key=lambda x: (
-            x["avg_hydration"] +
-            x["avg_glow"] +
-            x["avg_texture"] -
-            x["avg_irritation"] -
-            x["avg_breakouts"] -
-            x["avg_redness"]
-        ),
-        reverse=True
-    )[:5]
-    return {
-        "total_feedbacks": len(feedbacks),
-        "positive_products": improved_count,
-        "neutral_products": stable_count,
-        "negative_products": worse_count,
-        "insights": insights,
-        "top_ingredients": top_ingredients,
-        "ingredient_correlations": ingredient_correlations
-    }
+    return await compute_user_learnings(
+        db=db,
+        user_id=user["user_id"]
+    )
+    
     
 @api_router.post("/skin/tracking")
 async def add_skin_tracking(
     payload: SkinTrackingRequest,
     user=Depends(get_current_user)
 ):
+    linked_products = []
+
+    if payload.linked_products:
+        cursor = db.product_analyses.find(
+            {
+                "user_id": user["user_id"],
+                "analysis_id": {
+                    "$in": payload.linked_products
+                }
+            },
+            {
+                "_id": 0,
+                "analysis_id": 1,
+                "product_name": 1,
+                "product_category": 1,
+                "score": 1
+            }
+        )
+
+        products = await cursor.to_list(
+            length=len(payload.linked_products)
+        )
+
+        products_by_id = {
+            product["analysis_id"]: product
+            for product in products
+            if product.get("analysis_id")
+        }
+
+        for analysis_id in payload.linked_products:
+            product = products_by_id.get(analysis_id)
+
+            if not product:
+                continue
+
+            linked_products.append({
+                "analysis_id": product["analysis_id"],
+                "product_name": (
+                    product.get("product_name")
+                    or "Produit analysé"
+                ),
+                "product_category": (
+                    product.get("product_category")
+                    or "skincare"
+                ),
+                "score": product.get("score")
+            })
+
     tracking = {
         "tracking_id": f"st_{uuid.uuid4().hex[:12]}",
         "user_id": user["user_id"],
@@ -2028,11 +2731,11 @@ async def add_skin_tracking(
         "breakouts": payload.breakouts,
         "redness": payload.redness,
 
-        "note": payload.note,
-        "image_base64": payload.image_base64,
+        "note": payload.note or "",
+        "image_base64": payload.image_base64 or "",
 
         "created_at": now_utc(),
-        "linked_products": payload.linked_products,
+        "linked_products": linked_products,
     }
 
     await db.skin_tracking.insert_one(tracking)
@@ -2214,18 +2917,33 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     demo_email = "demo@skincare.app"
-    existing = await db.users.find_one({"email": demo_email})
+
+    existing = await db.users.find_one({
+        "email": demo_email
+    })
+
     if not existing:
         await db.users.insert_one({
-            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "user_id": (
+                f"user_{uuid.uuid4().hex[:12]}"
+            ),
             "email": demo_email,
             "name": "Sophie Demo",
-            "password_hash": hash_password("Demo1234!"),
+            "password_hash": hash_password(
+                "Demo1234!"
+            ),
             "picture": None,
             "skin_profile": None,
+            "subscription": (
+                default_subscription()
+            ),
             "created_at": now_utc(),
         })
-        logger.info("Demo user seeded: demo@skincare.app / Demo1234!")
+
+        logger.info(
+            "Demo user seeded: "
+            "demo@skincare.app / Demo1234!"
+        )
 
 
 @app.on_event("shutdown")
