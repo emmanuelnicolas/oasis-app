@@ -12,7 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 import {
   colors,
-  fonts,
   radius,
   spacing,
 } from "../../../theme";
@@ -34,6 +33,8 @@ type Props = {
     firstEntry: JournalEntry,
     secondEntry: JournalEntry
   ) => void;
+
+  onAddTracking?: () => void;
 };
 
 function getImageUri(
@@ -53,9 +54,12 @@ export function PhotosCard({
   onDeleteEntry,
   onOpenEntry,
   onCompareEntries,
+  onAddTracking,
 }: Props) {
-  const [comparisonMode, setComparisonMode] =
-    useState(false);
+  const [
+    comparisonMode,
+    setComparisonMode,
+  ] = useState(false);
 
   const [
     selectedTrackingIds,
@@ -66,7 +70,7 @@ export function PhotosCard({
     .filter((entry) =>
       Boolean(entry.image_base64)
     )
-    .slice(0, 6);
+    .slice(0, 8);
 
   const resetComparison = () => {
     setComparisonMode(false);
@@ -100,11 +104,13 @@ export function PhotosCard({
       );
 
     if (alreadySelected) {
-      setSelectedTrackingIds((current) =>
-        current.filter(
-          (trackingId) =>
-            trackingId !== entry.tracking_id
-        )
+      setSelectedTrackingIds(
+        (current) =>
+          current.filter(
+            (trackingId) =>
+              trackingId !==
+              entry.tracking_id
+          )
       );
 
       return;
@@ -115,33 +121,42 @@ export function PhotosCard({
       entry.tracking_id,
     ];
 
-    setSelectedTrackingIds(nextSelection);
+    setSelectedTrackingIds(
+      nextSelection
+    );
 
     if (nextSelection.length === 2) {
-      const selectedEntries = nextSelection
-        .map((trackingId) =>
-          photos.find(
-            (photo) =>
-              photo.tracking_id === trackingId
+      const selectedEntries =
+        nextSelection
+          .map((trackingId) =>
+            photos.find(
+              (photo) =>
+                photo.tracking_id ===
+                trackingId
+            )
           )
-        )
-        .filter(
-          (
-            selectedEntry
-          ): selectedEntry is JournalEntry =>
-            Boolean(selectedEntry)
-        )
-        .sort(
-          (firstEntry, secondEntry) =>
-            new Date(
-              firstEntry.created_at
-            ).getTime() -
-            new Date(
-              secondEntry.created_at
-            ).getTime()
-        );
+          .filter(
+            (
+              selectedEntry
+            ): selectedEntry is JournalEntry =>
+              Boolean(selectedEntry)
+          )
+          .sort(
+            (
+              firstEntry,
+              secondEntry
+            ) =>
+              new Date(
+                firstEntry.created_at
+              ).getTime() -
+              new Date(
+                secondEntry.created_at
+              ).getTime()
+          );
 
-      if (selectedEntries.length === 2) {
+      if (
+        selectedEntries.length === 2
+      ) {
         onCompareEntries(
           selectedEntries[0],
           selectedEntries[1]
@@ -178,7 +193,9 @@ export function PhotosCard({
           text: "Supprimer",
           style: "destructive",
           onPress: () => {
-            void onDeleteEntry(trackingId);
+            void onDeleteEntry(
+              trackingId
+            );
           },
         },
       ]
@@ -188,112 +205,124 @@ export function PhotosCard({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text
-            maxFontSizeMultiplier={1.1}
-            style={styles.eyebrow}
-          >
-            HISTORIQUE PEAU
-          </Text>
-
-          <Text
-            maxFontSizeMultiplier={1.15}
-            style={styles.title}
-          >
-            Vos photos récentes
-          </Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              comparisonMode
-                ? "Annuler la comparaison"
-                : "Comparer deux suivis"
-            }
-            onPress={toggleComparisonMode}
-            style={({ pressed }) => [
-              styles.compareButton,
-              comparisonMode &&
-                styles.compareButtonActive,
-              pressed &&
-                styles.compareButtonPressed,
-            ]}
-          >
+        <View style={styles.headerIdentity}>
+          <View style={styles.iconBubble}>
             <Ionicons
-              name={
-                comparisonMode
-                  ? "close-outline"
-                  : "git-compare-outline"
-              }
-              size={16}
-              color={
-                comparisonMode
-                  ? "#FFFFFF"
-                  : colors.textPrimary
-              }
+              name="images-outline"
+              size={18}
+              color={colors.textPrimary}
             />
+          </View>
+
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrow}>
+              HISTORIQUE PEAU
+            </Text>
 
             <Text
-              style={[
-                styles.compareButtonText,
-                comparisonMode &&
-                  styles.compareButtonTextActive,
-              ]}
-            >
-              {comparisonMode
-                ? "Annuler"
-                : "Comparer"}
-            </Text>
-          </Pressable>
-
-          <Text
-            maxFontSizeMultiplier={1.1}
-            style={styles.count}
-          >
-            {photos.length}
-          </Text>
+  numberOfLines={1}
+  adjustsFontSizeToFit
+  minimumFontScale={0.88}
+  style={styles.title}
+>
+  Vos photos récentes
+</Text>
+          </View>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            comparisonMode
+              ? "Annuler la comparaison"
+              : "Comparer deux suivis"
+          }
+          onPress={toggleComparisonMode}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.compareButton,
+            comparisonMode &&
+              styles.compareButtonActive,
+            pressed &&
+              styles.compareButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={
+              comparisonMode
+                ? "close-outline"
+                : "git-compare-outline"
+            }
+            size={19}
+            color={
+              comparisonMode
+                ? "#FFFFFF"
+                : colors.textPrimary
+            }
+          />
+        </Pressable>
       </View>
 
       {comparisonMode ? (
         <View style={styles.comparisonHint}>
           <Ionicons
             name="information-circle-outline"
-            size={18}
+            size={17}
             color={colors.textSecondary}
           />
 
-          <Text style={styles.comparisonHintText}>
-            Sélectionnez deux photos à comparer
-            ({selectedTrackingIds.length}/2).
+          <Text
+            numberOfLines={2}
+            style={
+              styles.comparisonHintText
+            }
+          >
+            Sélectionnez deux photos
+            ({selectedTrackingIds.length}/2)
           </Text>
         </View>
       ) : null}
 
       {photos.length === 0 ? (
-        <View style={styles.empty}>
-          <Text
-            maxFontSizeMultiplier={1.15}
-            style={styles.emptyTitle}
-          >
-            Votre évolution apparaîtra ici
-          </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter votre première photo"
+          onPress={onAddTracking}
+          style={({ pressed }) => [
+            styles.empty,
+            pressed && styles.emptyPressed,
+          ]}
+        >
+          <View style={styles.emptyIcon}>
+            <Ionicons
+              name="camera-outline"
+              size={21}
+              color={colors.textPrimary}
+            />
+          </View>
 
-          <Text
-            maxFontSizeMultiplier={1.15}
-            style={styles.emptyText}
-          >
-            Ajoutez régulièrement un selfie pour
-            comparer visuellement votre peau dans
-            le temps.
-          </Text>
-        </View>
+          <View style={styles.emptyContent}>
+            <Text style={styles.emptyTitle}>
+              Ajoutez votre première photo
+            </Text>
+
+            <Text style={styles.emptyText}>
+  Suivez visuellement l’évolution de votre peau.
+</Text>
+          </View>
+
+          <Ionicons
+            name="add"
+            size={21}
+            color={colors.textPrimary}
+          />
+        </Pressable>
       ) : (
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={false}
+          showsHorizontalScrollIndicator={
+            false
+          }
           contentContainerStyle={
             styles.photosRow
           }
@@ -319,8 +348,8 @@ export function PhotosCard({
                   accessibilityRole="button"
                   accessibilityLabel={
                     comparisonMode
-                      ? "Sélectionner ce suivi pour la comparaison"
-                      : "Ouvrir le détail du suivi"
+                      ? "Sélectionner cette photo"
+                      : "Ouvrir ce suivi"
                   }
                   onPress={() =>
                     handlePhotoPress(entry)
@@ -350,7 +379,7 @@ export function PhotosCard({
                       {selected ? (
                         <Ionicons
                           name="checkmark"
-                          size={16}
+                          size={15}
                           color="#FFFFFF"
                         />
                       ) : (
@@ -383,7 +412,7 @@ export function PhotosCard({
                     >
                       <Ionicons
                         name="trash-outline"
-                        size={16}
+                        size={14}
                         color="#FFFFFF"
                       />
                     </Pressable>
@@ -392,7 +421,7 @@ export function PhotosCard({
 
                 {entry.created_at ? (
                   <Text
-                    maxFontSizeMultiplier={1.1}
+                    numberOfLines={1}
                     style={styles.date}
                   >
                     {new Date(
@@ -409,6 +438,27 @@ export function PhotosCard({
               </View>
             );
           })}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter une nouvelle photo"
+            onPress={onAddTracking}
+            style={({ pressed }) => [
+              styles.addPhotoButton,
+              pressed &&
+                styles.addPhotoButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name="add"
+              size={24}
+              color={colors.textPrimary}
+            />
+
+            <Text style={styles.addPhotoText}>
+              Ajouter
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
@@ -421,52 +471,64 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: "#D8CEC5",
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
 
   header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "flex-start",
     marginBottom: spacing.md,
+  },
+
+  headerIdentity: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  iconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFE7E0",
+    marginRight: spacing.sm,
   },
 
   headerText: {
     flex: 1,
-    paddingRight: spacing.sm,
-  },
-
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
+    minWidth: 0,
   },
 
   eyebrow: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
-    letterSpacing: 1.4,
-    marginBottom: spacing.xs,
+    letterSpacing: 1.3,
+    marginBottom: 2,
   },
 
   title: {
-    fontSize: 22,
+    flexShrink: 1,
+    fontSize: 17,
+    lineHeight: 22,
     color: colors.textPrimary,
-    fontFamily: fonts.heading,
+    fontWeight: "600",
   },
 
   compareButton: {
-    minHeight: 34,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#D8CEC5",
-    backgroundColor: "#EFE7DF",
-    flexDirection: "row",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    marginLeft: spacing.sm,
+    borderWidth: 1,
+    borderColor: "#D8CEC5",
+    backgroundColor: "#F1EAE4",
   },
 
   compareButtonActive: {
@@ -475,35 +537,12 @@ const styles = StyleSheet.create({
   },
 
   compareButtonPressed: {
-    opacity: 0.7,
-  },
-
-  compareButtonText: {
-    fontSize: 12,
-    color: colors.textPrimary,
-    fontWeight: "600",
-  },
-
-  compareButtonTextActive: {
-    color: "#FFFFFF",
-  },
-
-  count: {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#EFE7DF",
-    textAlign: "center",
-    textAlignVertical: "center",
-    lineHeight: 34,
-    color: colors.textPrimary,
-    fontWeight: "600",
+    opacity: 0.68,
   },
 
   comparisonHint: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
     backgroundColor: "#F1EAE4",
     borderRadius: radius.md,
     padding: spacing.sm,
@@ -512,9 +551,10 @@ const styles = StyleSheet.create({
 
   comparisonHintText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.textSecondary,
+    marginLeft: spacing.xs,
   },
 
   photosRow: {
@@ -523,12 +563,14 @@ const styles = StyleSheet.create({
   },
 
   photoWrapper: {
-    width: 112,
+    width: 90,
   },
 
   imageContainer: {
     position: "relative",
-    borderRadius: radius.md,
+    width: 88,
+    height: 106,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: "transparent",
   },
@@ -539,23 +581,27 @@ const styles = StyleSheet.create({
 
   imagePressed: {
     opacity: 0.82,
-    transform: [{ scale: 0.98 }],
+    transform: [
+      {
+        scale: 0.98,
+      },
+    ],
   },
 
   photo: {
-    width: 108,
-    height: 134,
-    borderRadius: radius.md,
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
     backgroundColor: "#E5DCD4",
   },
 
   deleteButton: {
     position: "absolute",
-    top: 7,
-    right: 7,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor:
       "rgba(50, 38, 33, 0.72)",
     alignItems: "center",
@@ -564,16 +610,20 @@ const styles = StyleSheet.create({
 
   deleteButtonPressed: {
     opacity: 0.65,
-    transform: [{ scale: 0.92 }],
+    transform: [
+      {
+        scale: 0.92,
+      },
+    ],
   },
 
   selectionBadge: {
     position: "absolute",
-    top: 7,
-    right: 7,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor:
       "rgba(248, 243, 238, 0.92)",
     borderWidth: 1,
@@ -588,35 +638,79 @@ const styles = StyleSheet.create({
   },
 
   selectionNumber: {
-    fontSize: 19,
-    lineHeight: 21,
+    fontSize: 17,
     color: colors.textPrimary,
     fontWeight: "500",
   },
 
   date: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     marginTop: spacing.xs,
     textAlign: "center",
   },
 
+  addPhotoButton: {
+    width: 88,
+    height: 106,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#BFAFA3",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3ECE6",
+  },
+
+  addPhotoButtonPressed: {
+    opacity: 0.68,
+  },
+
+  addPhotoText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+
   empty: {
+    minHeight: 82,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#F1EAE4",
     borderRadius: radius.md,
-    padding: spacing.lg,
+    padding: spacing.md,
+  },
+
+  emptyPressed: {
+    opacity: 0.7,
+  },
+
+  emptyIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8F3EE",
+    marginRight: spacing.sm,
+  },
+
+  emptyContent: {
+    flex: 1,
+	minWidth: 0,
   },
 
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textPrimary,
     fontWeight: "600",
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
 
   emptyText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-  },
+  fontSize: 12,
+  lineHeight: 17,
+  color: colors.textSecondary,
+  flexShrink: 1,
+},
 });

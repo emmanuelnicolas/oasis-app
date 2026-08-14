@@ -28,16 +28,16 @@ export function useOrbAnimation(
       visualState.redness / 100;
 
     const breathingAmplitude =
-      1.01 + confidenceRatio * 0.01;
+		1.035 + confidenceRatio * 0.015;
 
-    const breathingDuration =
-      Math.round(3800 - confidenceRatio * 1200);
+	const breathingDuration =
+		Math.round(3200 - confidenceRatio * 700);
 
     const morphIntensity =
-      0.02 + rednessRatio * 0.025;
+		0.028 + rednessRatio * 0.03;
 
-    const translationIntensity =
-      2 + rednessRatio * 2;
+	const translationIntensity =
+		3 + rednessRatio * 2.5;
 
     breathingScale.value = withRepeat(
       withTiming(breathingAmplitude, {

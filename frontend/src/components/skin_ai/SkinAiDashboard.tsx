@@ -6,32 +6,43 @@ import {
   Text,
   View,
 } from "react-native";
-import { colors, fonts, spacing } from "../../theme";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  colors,
+  fonts,
+  spacing,
+} from "../../theme";
+
+import { useResponsive } from "../../hooks/useResponsive";
+import type { Routine } from "../../hooks/useRoutines";
+import type { JournalEntry } from "../../types/journal";
 
 import { DigitalTwinCard } from "./components/DigitalTwin/DigitalTwinCard";
 import { CoachCard } from "./components/CoachCard";
 import { AlertCard } from "./components/AlertCard";
-
 import { DiscoveriesCard } from "./components/DiscoveriesCard";
 import { PhotosCard } from "./components/PhotosCard";
 import { ProgressCard } from "./components/ProgressCard";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useResponsive } from "../../hooks/useResponsive";
-import { Ionicons } from "@expo/vector-icons";
+
 import { FeedbackCard } from "../journal/FeedbackCard";
-import type {
-  Routine,
-  RoutineStep,
-} from "../../hooks/useRoutines";
+
 import { RoutineSetupCard } from "./components/RoutineSetupCard";
-import type { JournalEntry } from "../../types/journal";
-import { TrackingDetailModal } from "./components/TrackingDetailModal";
+import { DailyRoutineSummary } from "./components/DailyRoutineSummary";
+
 import {
-  RoutineCard,
   RoutineItem,
   RoutinePeriod,
 } from "./components/RoutineCard";
+
+import { TrackingDetailModal } from "./components/TrackingDetailModal";
 import { TrackingComparisonModal } from "./components/TrackingComparisonModal";
+import { ProgressDetailModal } from "./components/ProgressDetailModal";
+import { RoutineDetailModal } from "./components/RoutineDetailModal";
+import { InsightDetailModal } from "./components/InsightDetailModal";
+import { DiscoveriesDetailModal } from "./components/DiscoveriesDetailModal";
+import { AlertDetailModal } from "./components/AlertDetailModal";
 
 type Props = {
   learnings: any;
@@ -41,9 +52,12 @@ type Props = {
 
   morningRoutine?: Routine;
   eveningRoutine?: Routine;
+  weeklyRoutine?: Routine;
 
   generatingRoutines: boolean;
-  onGenerateRoutines: () => void | Promise<void>;
+
+  onGenerateRoutines:
+    () => void | Promise<void>;
 
   onSubmitFeedback: (
     item: any,
@@ -51,22 +65,24 @@ type Props = {
   ) => void | Promise<void>;
 
   onAddTracking: () => void;
-  onToggleRoutineStep: (
-  period: RoutinePeriod,
-  order: number
-) => void | Promise<void>;
 
-isRoutineStepCompleted: (
-  period: RoutinePeriod,
-  order: number
-) => boolean;
-routineStreak: number;
-routineTotalDays: number;
-routineTodayProgress: number;
-onDeleteTracking: (
-  trackingId: string
-) => void | Promise<void>;
-weeklyRoutine?: Routine;
+  onToggleRoutineStep: (
+    period: RoutinePeriod,
+    order: number
+  ) => void | Promise<void>;
+
+  isRoutineStepCompleted: (
+    period: RoutinePeriod,
+    order: number
+  ) => boolean;
+
+  routineStreak: number;
+  routineTotalDays: number;
+  routineTodayProgress: number;
+
+  onDeleteTracking: (
+    trackingId: string
+  ) => void | Promise<void>;
 };
 
 export function SkinAiDashboard({
@@ -76,6 +92,7 @@ export function SkinAiDashboard({
   pendingFeedback,
   morningRoutine,
   eveningRoutine,
+  weeklyRoutine,
   generatingRoutines,
   onGenerateRoutines,
   onSubmitFeedback,
@@ -86,229 +103,349 @@ export function SkinAiDashboard({
   routineTotalDays,
   routineTodayProgress,
   onDeleteTracking,
-  weeklyRoutine,
 }: Props) {
-	
   const insets = useSafeAreaInsets();
 
   const {
     isPhone,
     horizontalPadding,
     contentMaxWidth,
-    cardGap,
   } = useResponsive();
-  const [
-  selectedTracking,
-  setSelectedTracking,
-] = useState<JournalEntry | null>(null);
 
-const [
-  comparisonEntries,
-  setComparisonEntries,
-] = useState<
-  [JournalEntry, JournalEntry] | null
->(null);
+  const [
+    selectedTracking,
+    setSelectedTracking,
+  ] = useState<JournalEntry | null>(null);
+
+  const [
+    comparisonEntries,
+    setComparisonEntries,
+  ] = useState<
+    [JournalEntry, JournalEntry] | null
+  >(null);
+  
+  const [
+  discoveriesOpen,
+  setDiscoveriesOpen,
+] = useState(false);
+
+  const [
+    progressOpen,
+    setProgressOpen,
+  ] = useState(false);
+
+  const [
+    routineDetailsOpen,
+    setRoutineDetailsOpen,
+  ] = useState(false);
+
+  const [
+    insightOpen,
+    setInsightOpen,
+  ] = useState(false);
+  
+  const [
+  alertOpen,
+  setAlertOpen,
+  ] = useState(false);
 
   const mapRoutineSteps = (
-  routineType: RoutinePeriod,
-  steps: Routine["steps"] = []
-): RoutineItem[] =>
-  steps.map((step) => ({
-    order: step.order,
-    label: step.name,
-    productName:
-      step.instructions ||
-      step.product_type ||
-      "Étape personnalisée",
-    completed:
-      isRoutineStepCompleted(
-        routineType,
-        step.order
-      ),
-  }));
+    routineType: RoutinePeriod,
+    steps: Routine["steps"] = []
+  ): RoutineItem[] =>
+    steps.map((step) => ({
+      order: step.order,
+      label: step.name,
+      productName:
+        step.instructions ||
+        step.product_type ||
+        "Étape personnalisée",
+      completed:
+        isRoutineStepCompleted(
+          routineType,
+          step.order
+        ),
+    }));
+
   return (
-  <ScrollView
-    style={styles.screen}
-    contentContainerStyle={[
-      styles.content,
-      {
-        paddingTop: insets.top + spacing.md,
-        paddingHorizontal: horizontalPadding,
-        paddingBottom: insets.bottom + spacing.xxl,
-      },
-    ]}
-    showsVerticalScrollIndicator={false}
-  >
-    <View
-      style={[
-        styles.contentInner,
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
         {
-          maxWidth: contentMaxWidth,
+          paddingTop:
+            insets.top + spacing.md,
+          paddingHorizontal:
+            horizontalPadding,
+          paddingBottom:
+            insets.bottom + spacing.xxl,
         },
       ]}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.brand}>OASIS AI</Text>
-
-          <Text
-  style={[
-    styles.title,
-    isPhone && styles.titlePhone,
-  ]}
->
-            Votre peau aujourd’hui
-          </Text>
-
-          <Text style={styles.subtitle}>
-            OASIS affine votre profil à partir de vos suivis, produits et
-            retours.
-          </Text>
-        </View>
-
-        <Pressable
-  accessibilityRole="button"
-  accessibilityLabel="Ajouter un suivi peau"
-  onPress={onAddTracking}
-  hitSlop={8}
-  style={({ pressed }) => [
-    styles.addButton,
-    pressed && styles.addButtonPressed,
-  ]}
->
-  <Ionicons
-    name="add"
-    size={24}
-    color="#FFFFFF"
-  />
-</Pressable>
-      </View>
-
-      <DigitalTwinCard
-  learnings={learnings}
-  insights={insights}
-/>
-
       <View
         style={[
-          styles.doubleRow,
+          styles.contentInner,
           {
-            flexDirection: isPhone ? "column" : "row",
-            gap: cardGap,
+            maxWidth: contentMaxWidth,
           },
         ]}
       >
-        <View style={styles.half}>
-          <CoachCard insights={insights} />
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.brand}>
+              OASIS AI
+            </Text>
+
+            <Text
+              style={[
+                styles.title,
+                isPhone &&
+                  styles.titlePhone,
+              ]}
+            >
+              Votre peau aujourd’hui
+            </Text>
+
+            <Text style={styles.subtitle}>
+              OASIS affine votre profil à
+              partir de vos suivis, produits
+              et retours.
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter un suivi peau"
+            onPress={onAddTracking}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed &&
+                styles.addButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name="add"
+              size={24}
+              color="#FFFFFF"
+            />
+          </Pressable>
         </View>
 
-        <View style={styles.half}>
-          <AlertCard />
-        </View>
-      </View>
+        <DigitalTwinCard
+          learnings={learnings}
+          insights={insights}
+        />
 
-      <ProgressCard
-  learnings={learnings}
-  streak={routineStreak}
-  totalDays={routineTotalDays}
-  todayProgress={routineTodayProgress}
-/>
-
-      {morningRoutine ||
-eveningRoutine ||
-weeklyRoutine ? (
-  <>
-    {morningRoutine ? (
-      <RoutineCard
-        period="matin"
-        items={mapRoutineSteps(
-          "matin",
-          morningRoutine.steps
-        )}
-        onToggleStep={
-          onToggleRoutineStep
-        }
-      />
-    ) : null}
-
-    {eveningRoutine ? (
-      <RoutineCard
-        period="soir"
-        items={mapRoutineSteps(
-          "soir",
-          eveningRoutine.steps
-        )}
-        onToggleStep={
-          onToggleRoutineStep
-        }
-      />
-    ) : null}
-
-    {weeklyRoutine ? (
-      <RoutineCard
-        period="hebdo"
-        items={mapRoutineSteps(
-          "hebdo",
-          weeklyRoutine.steps
-        )}
-        onToggleStep={
-          onToggleRoutineStep
-        }
-      />
-    ) : null}
-  </>
-) : (
-  <RoutineSetupCard
-    generating={generatingRoutines}
-    onGenerate={onGenerateRoutines}
-  />
-)}
-
-<FeedbackCard
-  pendingFeedback={pendingFeedback}
-  onSubmit={onSubmitFeedback}
-/>
-
-<DiscoveriesCard learnings={learnings} />
-
-<PhotosCard
-  entries={entries as JournalEntry[]}
-  onDeleteEntry={onDeleteTracking}
-  onOpenEntry={(entry) =>
-    setSelectedTracking(entry)
-  }
-  onCompareEntries={(
-    firstEntry,
-    secondEntry
-  ) =>
-    setComparisonEntries([
-      firstEntry,
-      secondEntry,
-    ])
-  }
-/>
-
-<TrackingDetailModal
-  visible={Boolean(selectedTracking)}
-  entry={selectedTracking}
-  onClose={() => setSelectedTracking(null)}
-/>
-
-<TrackingComparisonModal
-  visible={Boolean(comparisonEntries)}
-  firstEntry={
-    comparisonEntries?.[0] || null
-  }
-  secondEntry={
-    comparisonEntries?.[1] || null
-  }
+        <CoachCard
+          insights={insights}
+          onPress={() =>
+            setInsightOpen(true)
+          }
+        />
+		
+		<AlertDetailModal
+  visible={alertOpen}
   onClose={() =>
-    setComparisonEntries(null)
+    setAlertOpen(false)
   }
 />
-    </View>
-  </ScrollView>
-);
+
+        <AlertCard
+  onPress={() =>
+    setAlertOpen(true)
+  }
+/>
+
+        {morningRoutine ||
+        eveningRoutine ||
+        weeklyRoutine ? (
+          <DailyRoutineSummary
+            morningItems={
+              morningRoutine
+                ? mapRoutineSteps(
+                    "matin",
+                    morningRoutine.steps
+                  )
+                : []
+            }
+            eveningItems={
+              eveningRoutine
+                ? mapRoutineSteps(
+                    "soir",
+                    eveningRoutine.steps
+                  )
+                : []
+            }
+            weeklyItems={
+              weeklyRoutine
+                ? mapRoutineSteps(
+                    "hebdo",
+                    weeklyRoutine.steps
+                  )
+                : []
+            }
+            onToggleStep={
+              onToggleRoutineStep
+            }
+            onOpenDetails={() =>
+              setRoutineDetailsOpen(
+                true
+              )
+            }
+          />
+        ) : (
+          <RoutineSetupCard
+            generating={
+              generatingRoutines
+            }
+            onGenerate={
+              onGenerateRoutines
+            }
+          />
+        )}
+
+        <ProgressCard
+          learnings={learnings}
+          streak={routineStreak}
+          totalDays={routineTotalDays}
+          todayProgress={
+            routineTodayProgress
+          }
+          onPress={() =>
+            setProgressOpen(true)
+          }
+        />
+
+        <FeedbackCard
+          pendingFeedback={
+            pendingFeedback
+          }
+          onSubmit={
+            onSubmitFeedback
+          }
+        />
+
+        <DiscoveriesCard
+		  learnings={learnings}
+		  onPress={() =>
+			setDiscoveriesOpen(true)
+		  }
+		/>
+
+        <PhotosCard
+          entries={
+            entries as JournalEntry[]
+          }
+          onDeleteEntry={
+            onDeleteTracking
+          }
+          onOpenEntry={(entry) =>
+            setSelectedTracking(entry)
+          }
+          onCompareEntries={(
+            firstEntry,
+            secondEntry
+          ) =>
+            setComparisonEntries([
+              firstEntry,
+              secondEntry,
+            ])
+          }
+          onAddTracking={
+            onAddTracking
+          }
+        />
+
+        <TrackingDetailModal
+          visible={Boolean(
+            selectedTracking
+          )}
+          entry={selectedTracking}
+          onClose={() =>
+            setSelectedTracking(null)
+          }
+        />
+
+        <TrackingComparisonModal
+          visible={Boolean(
+            comparisonEntries
+          )}
+          firstEntry={
+            comparisonEntries?.[0] ||
+            null
+          }
+          secondEntry={
+            comparisonEntries?.[1] ||
+            null
+          }
+          onClose={() =>
+            setComparisonEntries(null)
+          }
+        />
+
+        <ProgressDetailModal
+          visible={progressOpen}
+          onClose={() =>
+            setProgressOpen(false)
+          }
+          streak={routineStreak}
+          totalDays={routineTotalDays}
+          todayProgress={
+            routineTodayProgress
+          }
+          learnings={learnings}
+        />
+
+        <RoutineDetailModal
+          visible={
+            routineDetailsOpen
+          }
+          onClose={() =>
+            setRoutineDetailsOpen(
+              false
+            )
+          }
+          morningItems={
+            morningRoutine
+              ? mapRoutineSteps(
+                  "matin",
+                  morningRoutine.steps
+                )
+              : []
+          }
+          eveningItems={
+            eveningRoutine
+              ? mapRoutineSteps(
+                  "soir",
+                  eveningRoutine.steps
+                )
+              : []
+          }
+          weeklyItems={
+            weeklyRoutine
+              ? mapRoutineSteps(
+                  "hebdo",
+                  weeklyRoutine.steps
+                )
+              : []
+          }
+          onToggleStep={
+            onToggleRoutineStep
+          }
+        />
+
+        <InsightDetailModal
+          visible={insightOpen}
+          onClose={() =>
+            setInsightOpen(false)
+          }
+          insights={insights}
+        />
+      </View>
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -353,6 +490,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
 
+  titlePhone: {
+    fontSize: 21,
+    lineHeight: 26,
+  },
+
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
@@ -360,34 +502,21 @@ const styles = StyleSheet.create({
     maxWidth: 420,
   },
 
-  doubleRow: {
-    width: "100%",
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
   },
 
-  half: {
-    flex: 1,
+  addButtonPressed: {
+    opacity: 0.72,
+    transform: [
+      {
+        scale: 0.96,
+      },
+    ],
   },
-  
-  titlePhone: {
-  fontSize: 21,
-  lineHeight: 26,
-},
-
-addButton: {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: colors.primary,
-},
-
-addButtonPressed: {
-  opacity: 0.72,
-  transform: [
-    {
-      scale: 0.96,
-    },
-  ],
-},
 });

@@ -1,85 +1,112 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { colors, fonts, radius, spacing } from "../../../theme";
-import { useResponsive } from "../../../hooks/useResponsive";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
+import {
+  colors,
+  fonts,
+  radius,
+  spacing,
+} from "../../../theme";
 
 type Props = {
   insights: string[];
+  onPress?: () => void;
 };
 
-export function CoachCard({ insights }: Props) {
-  const { isPhone } = useResponsive();
+export function CoachCard({
+  insights,
+  onPress,
+}: Props) {
   const message =
     insights?.[0] ||
     "OASIS commence à construire votre profil peau personnalisé.";
 
   return (
-    <View style={[styles.card, isPhone && styles.cardPhone]}>
-      <Text
-  maxFontSizeMultiplier={1.1}
-  style={styles.eyebrow}
->
-  COACH OASIS
-</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Voir le conseil OASIS"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <View style={styles.textContent}>
+        <Text style={styles.eyebrow}>
+          INSIGHT DU MOMENT
+        </Text>
 
-      <Text
-  maxFontSizeMultiplier={1.15}
-  style={[
-    styles.message,
-    isPhone && styles.messagePhone,
-  ]}
->
-  {message}
-</Text>
+        <Text
+          numberOfLines={3}
+          style={styles.message}
+        >
+          {message}
+        </Text>
+      </View>
 
-      <Text
-  maxFontSizeMultiplier={1.15}
-  style={styles.footer}
->
-        Ce conseil évoluera automatiquement avec vos suivis, vos produits et
-        vos retours.
-      </Text>
-    </View>
+      <View style={styles.arrowButton}>
+        <Ionicons
+          name="arrow-forward"
+          size={20}
+          color={colors.textPrimary}
+        />
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    minHeight: 112,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: "#F8F3EE",
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: "#D8CEC5",
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+
+  cardPressed: {
+    opacity: 0.74,
+  },
+
+  textContent: {
+    flex: 1,
+    paddingRight: spacing.md,
   },
 
   eyebrow: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    letterSpacing: 1.4,
-    marginBottom: spacing.md,
+    letterSpacing: 1.3,
+    marginBottom: spacing.xs,
   },
 
   message: {
-    fontSize: 22,
-    lineHeight: 31,
+    fontSize: 17,
+    lineHeight: 23,
     color: colors.textPrimary,
     fontFamily: fonts.heading,
-    marginBottom: spacing.md,
   },
 
-  footer: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
+  arrowButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1EAE4",
+    borderWidth: 1,
+    borderColor: "#DED2C8",
   },
-  cardPhone: {
-  padding: spacing.md,
-  marginBottom: spacing.md,
-},
-
-messagePhone: {
-  fontSize: 18,
-  lineHeight: 25,
-},
 });

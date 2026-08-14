@@ -107,17 +107,20 @@ export function OrbMetrics({
             ]}
           >
             <Text
-              maxFontSizeMultiplier={1.1}
-              style={[
-                styles.label,
-                {
-                  fontSize: labelSize,
-                },
-                selected && styles.labelSelected,
-              ]}
-            >
-              {metric.label}
-            </Text>
+  maxFontSizeMultiplier={1.1}
+  numberOfLines={1}
+  adjustsFontSizeToFit
+  minimumFontScale={0.82}
+  style={[
+    styles.label,
+    {
+      fontSize: labelSize,
+    },
+    selected && styles.labelSelected,
+  ]}
+>
+  {metric.label}
+</Text>
 
             <Text
               maxFontSizeMultiplier={1.1}
@@ -146,7 +149,7 @@ const styles = StyleSheet.create({
 
   metric: {
     position: "absolute",
-    width: "31%",
+    width: "34%",
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 4,
@@ -168,29 +171,30 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
 
-  topLeft: {
-    left: 0,
-    top: "17%",
-  },
+topLeft: {
+  left: -4,
+  top: "14%",
+},
 
-  topRight: {
-    right: 0,
-    top: "17%",
-  },
+topRight: {
+  right: -4,
+  top: "14%",
+},
 
-  bottomLeft: {
-    left: 0,
-    bottom: "17%",
-  },
+bottomLeft: {
+  left: -4,
+  bottom: "14%",
+},
 
-  bottomRight: {
-    right: 0,
-    bottom: "17%",
-  },
+bottomRight: {
+  right: -4,
+  bottom: "14%",
+},
 
   label: {
     color: colors.textSecondary,
     lineHeight: 16,
+	fontWeight: "500",
   },
 
   labelSelected: {

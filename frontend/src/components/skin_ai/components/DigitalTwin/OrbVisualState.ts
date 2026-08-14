@@ -7,14 +7,24 @@ export type OrbVisualState = {
 
   hydrationLevel: "low" | "medium" | "good";
   rednessLevel: "calm" | "moderate" | "high";
-  confidenceLevel: "discovery" | "learning" | "mature";
+  confidenceLevel:
+    | "discovery"
+    | "learning"
+    | "mature";
 
   coreColor: string;
   innerLightColor: string;
   glowColor: string;
+  membraneColor: string;
+  membraneAccentColor: string;
+  outlineColor: string;
+  sparkColor: string;
 
   glowOpacity: number;
   coreOpacity: number;
+  membraneOpacity: number;
+  outlineOpacity: number;
+  sparkOpacity: number;
 };
 
 type Params = {
@@ -26,7 +36,10 @@ type Params = {
 };
 
 function clamp(value: number) {
-  return Math.max(0, Math.min(100, value));
+  return Math.max(
+    0,
+    Math.min(100, value)
+  );
 }
 
 export function buildOrbVisualState({
@@ -63,37 +76,67 @@ export function buildOrbVisualState({
         ? "learning"
         : "mature";
 
-  let coreColor = "#3E302B";
-  let innerLightColor = "#6C554C";
-  let glowColor = "#D6C5B8";
+  let coreColor = "#B7A89F";
+  let innerLightColor = "#FFF8F2";
+  let glowColor = "#E7DDD4";
+  let membraneColor = "#F5ECE5";
+  let membraneAccentColor = "#D9C7BA";
+  let outlineColor = "#A99689";
+  let sparkColor = "#FFFDF9";
 
   if (hydrationLevel === "low") {
-    coreColor = "#403A3C";
-    innerLightColor = "#756C70";
-    glowColor = "#D8D1D2";
+    coreColor = "#AAA7A5";
+    innerLightColor = "#F8F4F1";
+    glowColor = "#E2DEDC";
+    membraneColor = "#EEEAE8";
+    membraneAccentColor = "#CBC3BF";
+    outlineColor = "#918B87";
   }
 
   if (hydrationLevel === "good") {
-    coreColor = "#2F3934";
-    innerLightColor = "#65766C";
-    glowColor = "#C9D8CF";
+    coreColor = "#A8B4AC";
+    innerLightColor = "#F8FCF9";
+    glowColor = "#DCE7E0";
+    membraneColor = "#EDF5F0";
+    membraneAccentColor = "#C5D4CA";
+    outlineColor = "#8D9D92";
   }
 
   if (rednessLevel === "moderate") {
-    glowColor = "#DFC9C1";
+    glowColor = "#E8D8D2";
+    membraneAccentColor = "#D7BEB5";
   }
 
   if (rednessLevel === "high") {
-    coreColor = "#493431";
-    innerLightColor = "#835D56";
-    glowColor = "#E2BDB4";
+    coreColor = "#B6A09C";
+    innerLightColor = "#FFF7F5";
+    glowColor = "#ECD3CD";
+    membraneColor = "#F4E4E0";
+    membraneAccentColor = "#D8B3AA";
+    outlineColor = "#A9857D";
   }
 
   const glowOpacity =
-    0.08 + safeGlow / 1000 + safeConfidence / 2000;
+    0.14 +
+    safeGlow / 1400 +
+    safeConfidence / 2200;
 
   const coreOpacity =
-    0.72 + safeConfidence / 560;
+    0.26 +
+    safeConfidence / 700;
+
+  const membraneOpacity =
+    0.18 +
+    safeTexture / 1300 +
+    safeConfidence / 1700;
+
+  const outlineOpacity =
+    0.26 +
+    safeConfidence / 900;
+
+  const sparkOpacity =
+    0.24 +
+    safeGlow / 600;
 
   return {
     hydration: safeHydration,
@@ -109,8 +152,34 @@ export function buildOrbVisualState({
     coreColor,
     innerLightColor,
     glowColor,
+    membraneColor,
+    membraneAccentColor,
+    outlineColor,
+    sparkColor,
 
-    glowOpacity: Math.min(0.22, glowOpacity),
-    coreOpacity: Math.min(0.92, coreOpacity),
+    glowOpacity: Math.min(
+      0.26,
+      glowOpacity
+    ),
+
+    coreOpacity: Math.min(
+      0.42,
+      coreOpacity
+    ),
+
+    membraneOpacity: Math.min(
+      0.32,
+      membraneOpacity
+    ),
+
+    outlineOpacity: Math.min(
+      0.38,
+      outlineOpacity
+    ),
+
+    sparkOpacity: Math.min(
+      0.42,
+      sparkOpacity
+    ),
   };
 }

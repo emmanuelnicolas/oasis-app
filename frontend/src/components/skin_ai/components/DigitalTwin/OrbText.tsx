@@ -1,26 +1,47 @@
- import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 type Props = {
   confidence: number;
 };
 
-export function OrbText({ confidence }: Props) {
+export function OrbText({
+  confidence,
+}: Props) {
   const safeConfidence = Math.max(
     0,
-    Math.min(100, Math.round(confidence))
+    Math.min(
+      100,
+      Math.round(confidence)
+    )
   );
 
   return (
-    <View pointerEvents="none" style={styles.container}>
-      <Text style={styles.label}>SCORE GLOBAL</Text>
+    <View
+      pointerEvents="none"
+      style={styles.container}
+    >
+      <Text style={styles.label}>
+        SCORE GLOBAL
+      </Text>
 
       <View style={styles.scoreRow}>
-        <Text style={styles.score}>{safeConfidence}</Text>
-        <Text style={styles.percent}>%</Text>
+        <Text style={styles.score}>
+          {safeConfidence}
+        </Text>
+
+        <Text style={styles.percent}>
+          %
+        </Text>
       </View>
 
-      <Text style={styles.caption}>DIGITAL TWIN</Text>
+      <Text style={styles.caption}>
+        DIGITAL TWIN
+      </Text>
     </View>
   );
 }
@@ -30,13 +51,19 @@ const styles = StyleSheet.create({
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 116,
+    minHeight: 116,
+    borderRadius: 58,
+    backgroundColor:
+      "rgba(248, 242, 237, 0.40)",
   },
 
   label: {
-    color: "#F5EEE9",
-    fontSize: 10,
-    letterSpacing: 1.2,
-    marginBottom: 4,
+    color: "#665B54",
+    fontSize: 9,
+    letterSpacing: 1.25,
+    marginBottom: 2,
+    fontWeight: "500",
   },
 
   scoreRow: {
@@ -45,23 +72,24 @@ const styles = StyleSheet.create({
   },
 
   score: {
-    color: "#FFFFFF",
-    fontSize: 52,
-    lineHeight: 58,
-    fontWeight: "600",
+    color: "#24372E",
+    fontSize: 50,
+    lineHeight: 54,
+    fontWeight: "500",
   },
 
   percent: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    lineHeight: 34,
+    color: "#24372E",
+    fontSize: 18,
+    lineHeight: 30,
     marginLeft: 2,
+    fontWeight: "500",
   },
 
   caption: {
-    color: "#E7DDD6",
-    fontSize: 10,
-    letterSpacing: 1.5,
-    marginTop: 3,
+    color: "#877970",
+    fontSize: 8,
+    letterSpacing: 1.4,
+    marginTop: 1,
   },
 });

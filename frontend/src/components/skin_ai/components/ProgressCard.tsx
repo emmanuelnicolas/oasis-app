@@ -1,13 +1,14 @@
 import React from "react";
 import {
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   colors,
-  fonts,
   radius,
   spacing,
 } from "../../../theme";
@@ -17,50 +18,66 @@ type Props = {
   streak: number;
   totalDays: number;
   todayProgress: number;
-};
-
-const LABELS: Record<string, string> = {
-  hydration: "Hydratation",
-  glow: "Glow",
-  texture: "Texture",
-  irritation: "Irritation",
-  breakouts: "Boutons",
-  redness: "Rougeurs",
+  onPress?: () => void;
 };
 
 export function ProgressCard({
-  learnings,
   streak,
   totalDays,
   todayProgress,
+  onPress,
 }: Props) {
-  const metrics =
-    learnings?.skin_intelligence?.metrics || {};
-
-  const entries = Object.entries(metrics);
+  const safeProgress = Math.max(
+    0,
+    Math.min(100, todayProgress)
+  );
 
   const routineMessage =
-    todayProgress === 100
-      ? "Votre routine du jour est terminée."
-      : todayProgress > 0
-        ? "Votre routine du jour est en cours."
-        : "Commencez votre routine pour maintenir votre régularité.";
+    safeProgress === 100
+      ? "Routine terminée aujourd’hui"
+      : safeProgress > 0
+        ? "Routine en cours aujourd’hui"
+        : "Commencez votre routine aujourd’hui";
 
   return (
-    <View style={styles.card}>
-      <Text
-        maxFontSizeMultiplier={1.1}
-        style={styles.eyebrow}
-      >
-        PROGRESSION
-      </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Voir votre progression OASIS"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <View style={styles.header}>
+        <View style={styles.titleRow}>
+          <View style={styles.iconBubble}>
+            <Ionicons
+              name="stats-chart-outline"
+              size={18}
+              color={colors.textPrimary}
+            />
+          </View>
 
-      <Text
-        maxFontSizeMultiplier={1.15}
-        style={styles.title}
-      >
-        Votre régularité OASIS
-      </Text>
+          <View style={styles.titleContent}>
+            <Text style={styles.eyebrow}>
+              PROGRESSION
+            </Text>
+
+            <Text style={styles.title}>
+              Votre régularité
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.arrowButton}>
+          <Ionicons
+            name="arrow-forward"
+            size={19}
+            color={colors.textPrimary}
+          />
+        </View>
+      </View>
 
       <View style={styles.statsRow}>
         <View style={styles.stat}>
@@ -69,7 +86,7 @@ export function ProgressCard({
           </Text>
 
           <Text style={styles.statLabel}>
-            jours de série
+            série
           </Text>
         </View>
 
@@ -89,7 +106,7 @@ export function ProgressCard({
 
         <View style={styles.stat}>
           <Text style={styles.statValue}>
-            {todayProgress}%
+            {safeProgress}%
           </Text>
 
           <Text style={styles.statLabel}>
@@ -98,79 +115,24 @@ export function ProgressCard({
         </View>
       </View>
 
-      <View style={styles.todayTrack}>
+      <View style={styles.progressTrack}>
         <View
           style={[
-            styles.todayFill,
+            styles.progressFill,
             {
-              width: `${todayProgress}%`,
+              width: `${safeProgress}%`,
             },
           ]}
         />
       </View>
 
-      <Text style={styles.routineMessage}>
+      <Text
+        numberOfLines={1}
+        style={styles.message}
+      >
         {routineMessage}
       </Text>
-
-      {entries.length > 0 ? (
-        <>
-          <Text style={styles.sectionTitle}>
-            Évolution de la peau
-          </Text>
-
-          {entries.map(([key, value]: any) => {
-            const latest = Number(
-              value?.latest || 0
-            );
-
-            const reverseMetric =
-              key === "irritation" ||
-              key === "breakouts" ||
-              key === "redness";
-
-            const displayedProgress =
-              reverseMetric
-                ? Math.max(
-                    0,
-                    Math.min(100, 100 - latest * 10)
-                  )
-                : Math.max(
-                    0,
-                    Math.min(100, latest * 10)
-                  );
-
-            return (
-              <View
-                key={key}
-                style={styles.metric}
-              >
-                <View style={styles.row}>
-                  <Text style={styles.name}>
-                    {LABELS[key] || key}
-                  </Text>
-
-                  <Text style={styles.percent}>
-                    {latest}/10
-                  </Text>
-                </View>
-
-                <View style={styles.track}>
-                  <View
-                    style={[
-                      styles.fill,
-                      {
-                        width: `${displayedProgress}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            );
-          })}
-        </>
-      ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -180,28 +142,71 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: "#D8CEC5",
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+
+  cardPressed: {
+    opacity: 0.74,
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  iconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFE7E0",
+    marginRight: spacing.sm,
+  },
+
+  titleContent: {
+    flex: 1,
   },
 
   eyebrow: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
-    letterSpacing: 1.4,
-    marginBottom: spacing.sm,
+    letterSpacing: 1.3,
+    marginBottom: 2,
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 17,
+    lineHeight: 22,
     color: colors.textPrimary,
-    fontFamily: fonts.heading,
-    marginBottom: spacing.md,
+    fontWeight: "600",
+  },
+
+  arrowButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1EAE4",
+    borderWidth: 1,
+    borderColor: "#DED2C8",
+    marginLeft: spacing.md,
   },
 
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
 
   stat: {
@@ -210,83 +215,42 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    fontSize: 21,
+    fontSize: 18,
+    lineHeight: 22,
     color: colors.textPrimary,
     fontWeight: "700",
   },
 
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
     textAlign: "center",
   },
 
   statDivider: {
     width: 1,
-    height: 34,
+    height: 28,
     backgroundColor: "#D8CEC5",
   },
 
-  todayTrack: {
-    height: 8,
+  progressTrack: {
+    height: 6,
     backgroundColor: "#E5DCD4",
     borderRadius: 999,
     overflow: "hidden",
-    marginBottom: spacing.sm,
-  },
-
-  todayFill: {
-    height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: 999,
-  },
-
-  routineMessage: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    fontWeight: "600",
-    marginBottom: spacing.md,
-  },
-
-  metric: {
-    marginBottom: spacing.md,
-  },
-
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     marginBottom: spacing.xs,
   },
 
-  name: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: "600",
-  },
-
-  percent: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-
-  track: {
-    height: 8,
-    backgroundColor: "#E5DCD4",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-
-  fill: {
+  progressFill: {
     height: "100%",
     backgroundColor: colors.primary,
     borderRadius: 999,
+  },
+
+  message: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.textSecondary,
   },
 });
