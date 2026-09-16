@@ -15,6 +15,7 @@ import httpx
 import hashlib
 import secrets
 import resend
+import time
 from datetime import timedelta
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
@@ -25,6 +26,7 @@ from oasis_core.learning_engine import compute_user_learnings
 from oasis_core.formula_engine import analyze_formula
 from oasis_core.marketing_engine import analyze_marketing_claims
 from oasis_core.synergy_engine import analyze_synergies
+from difflib import SequenceMatcher
 from oasis_core.access_control import (
     build_access_summary,
     can_analyze_product,
@@ -410,7 +412,7 @@ async def get_access_usage(
     )
 
     selfie_analyses_used = (
-        await db.skin_analyses
+        await db.skin_analysis_usage
         .count_documents({
             "user_id": user["user_id"],
             "created_at": {
@@ -640,6 +642,91 @@ def parse_json_from_text(text: str) -> Dict[str, Any]:
     if not match:
         raise ValueError("No JSON found in response")
     return json.loads(match.group(0))
+
+
+def parse_json_with_repair(text: str) -> Dict[str, Any]:
+    """
+    Parse une réponse JSON Gemini de manière robuste.
+
+    1. Tente le parsing normal.
+    2. Nettoie les code fences / guillemets typographiques.
+    3. Utilise JSONDecoder.raw_decode() pour extraire le premier
+       objet JSON valide, même si Gemini ajoute du texte ou un
+       second bloc après le JSON principal.
+    4. Tente une réparation légère des virgules finales.
+    """
+    if not text:
+        raise ValueError("Empty Gemini response")
+
+    try:
+        return parse_json_from_text(text)
+    except Exception:
+        pass
+
+    cleaned = str(text).strip()
+
+    cleaned = re.sub(
+        r"^\s*```(?:json)?\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\s*```\s*$",
+        "",
+        cleaned,
+    )
+
+    cleaned = (
+        cleaned
+        .replace("“", '"')
+        .replace("”", '"')
+        .replace("„", '"')
+    )
+
+    cleaned = "".join(
+        ch
+        for ch in cleaned
+        if ord(ch) >= 32 or ch in "\n\r\t"
+    )
+
+    decoder = json.JSONDecoder()
+
+    for index, char in enumerate(cleaned):
+        if char != "{":
+            continue
+
+        candidate = cleaned[index:]
+
+        try:
+            data, _ = decoder.raw_decode(candidate)
+
+            if isinstance(data, dict):
+                return data
+
+        except json.JSONDecodeError:
+            pass
+
+        repaired_candidate = re.sub(
+            r",\s*([}\]])",
+            r"\1",
+            candidate,
+        )
+
+        try:
+            data, _ = decoder.raw_decode(
+                repaired_candidate
+            )
+
+            if isinstance(data, dict):
+                return data
+
+        except json.JSONDecodeError:
+            continue
+
+    raise ValueError(
+        "No valid JSON object found after repair"
+    )
 
 
 @api_router.post("/routines/generate")
@@ -996,6 +1083,13 @@ Format exact :
     await db.skin_analyses.insert_one(
         analysis_doc
     )
+
+    await db.skin_analysis_usage.insert_one({
+        "usage_id": f"selfie_usage_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "analysis_id": analysis_doc["analysis_id"],
+        "created_at": now_utc(),
+    })
 
     analysis_doc.pop("_id", None)
 
@@ -1509,6 +1603,145 @@ def normalize_inci_text(text: str) -> str:
 def make_inci_hash(text: str) -> str:
     normalized = normalize_inci_text(text)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    
+def build_formula_signature(
+    ingredients_text: str,
+    ingredients_map: Dict[str, Dict[str, Any]]
+) -> List[str]:
+    """
+    Construit une signature ordonnée à partir des ingrédients
+    connus dans la base OASIS.
+
+    L'ordre est conservé pour ne pas casser l'analyse
+    de position / concentration.
+    """
+
+    source = normalize_ingredient_name(
+        ingredients_text
+    )
+
+    if not source:
+        return []
+
+    found = []
+
+    for known_name, ingredient_data in ingredients_map.items():
+        if not known_name:
+            continue
+
+        position = source.find(known_name)
+
+        if position == -1:
+            continue
+
+        canonical_name = normalize_ingredient_name(
+            ingredient_data.get(
+                "inci_name",
+                known_name
+            )
+        )
+
+        found.append({
+            "position": position,
+            "name": canonical_name,
+        })
+
+    found.sort(
+        key=lambda item: item["position"]
+    )
+
+    signature = []
+    seen = set()
+
+    for item in found:
+        name = item["name"]
+
+        if not name or name in seen:
+            continue
+
+        seen.add(name)
+        signature.append(name)
+
+    # Les 20 premiers suffisent pour identifier
+    # fortement une formule tout en gardant son ordre.
+    return signature[:20]
+
+
+def formula_signature_similarity(
+    signature_a: List[str],
+    signature_b: List[str]
+) -> float:
+    if len(signature_a) < 5 or len(signature_b) < 5:
+        return 0.0
+
+    matcher = SequenceMatcher(
+        None,
+        signature_a,
+        signature_b,
+        autojunk=False,
+    )
+
+    return matcher.ratio()
+
+
+def formula_signature_match(
+    signature_a: List[str],
+    signature_b: List[str]
+) -> Dict[str, Any]:
+    if len(signature_a) < 5 or len(signature_b) < 5:
+        return {
+            "match": False,
+            "similarity": 0.0,
+            "common_count": 0,
+            "common_ratio": 0.0,
+            "first_common": 0,
+        }
+
+    similarity = formula_signature_similarity(
+        signature_a,
+        signature_b,
+    )
+
+    common = [
+        ingredient
+        for ingredient in signature_a
+        if ingredient in signature_b
+    ]
+
+    common_count = len(common)
+
+    shortest_length = min(
+        len(signature_a),
+        len(signature_b),
+    )
+
+    common_ratio = (
+        common_count / shortest_length
+        if shortest_length
+        else 0.0
+    )
+
+    first_a = signature_a[:5]
+    first_b = signature_b[:5]
+
+    first_common = len(
+        set(first_a) & set(first_b)
+    )
+
+    is_match = (
+        similarity >= 0.75
+        and common_count >= 6
+        and common_ratio >= 0.75
+        and first_common >= 3
+    )
+
+    return {
+        "match": is_match,
+        "similarity": similarity,
+        "common_count": common_count,
+        "common_ratio": common_ratio,
+        "first_common": first_common,
+    }
 
 
 async def check_daily_analysis_limit(
@@ -1581,7 +1814,7 @@ async def check_monthly_selfie_limit(
         )
 
     analyses_used_this_month = (
-        await db.skin_analyses.count_documents({
+        await db.skin_analysis_usage.count_documents({
             "user_id": user["user_id"],
             "created_at": {
                 "$gte": month_start,
@@ -1669,6 +1902,173 @@ async def get_user_ingredient_preferences(user_id: str) -> Dict[str, int]:
                 preferences[name] -= 2
 
     return preferences
+async def build_local_product_fallback(
+    *,
+    payload: ProductAnalysisRequest,
+    user: Dict[str, Any],
+    profile: Dict[str, Any],
+    ingredients_map: Dict[str, Dict[str, Any]],
+    analysis_access: Dict[str, Any],
+    reason: str,
+) -> Dict[str, Any]:
+    """
+    Construit et enregistre une analyse locale lorsque Gemini est
+    indisponible ou renvoie un JSON inutilisable.
+    """
+    raw_ingredients = (
+        payload.ingredients_text.split(",")
+        if payload.ingredients_text
+        else []
+    )
+
+    ingredient_analysis = analyze_ingredients_for_user(
+        raw_ingredients,
+        profile,
+        ingredients_map,
+    )
+
+    formula_positioning = analyze_formula_positioning(
+        raw_ingredients,
+        ingredients_map,
+    )
+
+    formula_analysis = analyze_formula(
+        ingredient_names=raw_ingredients,
+        profile=profile,
+        ingredients_map=ingredients_map,
+    )
+
+    marketing_claims = get_marketing_claims(
+        payload.marketing_claims,
+    )
+
+    marketing_analysis = analyze_marketing_claims(
+        ingredient_names=raw_ingredients,
+        ingredients_map=ingredients_map,
+        claims=marketing_claims,
+    )
+
+    synergy_analysis = analyze_synergies(
+        ingredient_names=raw_ingredients,
+        profile=profile,
+        ingredients_map=ingredients_map,
+    )
+
+    fallback_doc = {
+        "analysis_id": f"pa_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "product_name": (
+            payload.name
+            or "Produit analysé"
+        ),
+        "product_category": "skincare",
+        "score": ingredient_analysis[
+            "ingredient_score"
+        ],
+        "extracted_ingredients_text": (
+            payload.ingredients_text
+            or ""
+        ),
+        "ingredients": [],
+        "risks": [],
+        "compatibility": {
+            "verdict": "à surveiller",
+            "reasons": [
+                (
+                    "Analyse locale utilisée car "
+                    "l'analyse IA complète n'était "
+                    "pas exploitable."
+                )
+            ],
+        },
+        "decision": {
+            "label": "Avec précaution",
+            "color": "orange",
+            "justification": (
+                "Analyse basée sur la base "
+                "d'ingrédients OASIS."
+            ),
+        },
+        "alternatives": [],
+        "ingredient_analysis": (
+            ingredient_analysis
+        ),
+        "formula_positioning": (
+            formula_positioning
+        ),
+        "formula_analysis": (
+            formula_analysis
+        ),
+        "marketing_claims": (
+            marketing_claims
+        ),
+        "marketing_analysis": (
+            marketing_analysis
+        ),
+        "synergy_analysis": (
+            synergy_analysis
+        ),
+        "recommended_products": [],
+        "from_fallback": True,
+        "fallback_reason": reason,
+        "created_at": now_utc(),
+        "created_at_day": (
+            now_utc().date().isoformat()
+        ),
+    }
+
+    await db.product_analyses.insert_one(
+        fallback_doc
+    )
+
+    fallback_doc.pop("_id", None)
+
+    await db.product_analysis_usage.insert_one({
+        "usage_id": (
+            f"usage_{uuid.uuid4().hex[:12]}"
+        ),
+        "user_id": user["user_id"],
+        "created_at_day": (
+            now_utc().date().isoformat()
+        ),
+        "created_at": now_utc(),
+    })
+
+    fallback_doc["access"] = {
+        "plan": analysis_access.get(
+            "plan",
+            "free",
+        ),
+        "limit": analysis_access.get(
+            "limit"
+        ),
+        "used_before_analysis": (
+            analysis_access.get(
+                "used",
+                0,
+            )
+        ),
+        "remaining_after_analysis": (
+            max(
+                0,
+                (
+                    analysis_access.get(
+                        "remaining",
+                        1,
+                    )
+                    or 1
+                ) - 1,
+            )
+            if analysis_access.get(
+                "remaining"
+            ) is not None
+            else None
+        ),
+    }
+
+    return fallback_doc
+
+
 @api_router.post("/products/analyze")
 async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_current_user)):
     if not payload.image_base64 and not payload.ingredients_text:
@@ -1676,11 +2076,27 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
             status_code=400,
             detail="Fournissez une photo ou la liste d'ingrédients"
         )
+    scan_started_at = time.perf_counter()
+    scan_id = uuid.uuid4().hex[:8]
 
+    logger.info(
+        "[SCAN %s] START image=%s text=%s",
+        scan_id,
+        bool(payload.image_base64),
+        bool(payload.ingredients_text),
+    )
     profile = user.get("skin_profile") or {}
-    
+
+    stage_started_at = time.perf_counter()
+
     ingredient_preferences = await get_user_ingredient_preferences(
         user["user_id"]
+    )
+
+    logger.info(
+        "[SCAN %s] ingredient_preferences %.0f ms",
+        scan_id,
+        (time.perf_counter() - stage_started_at) * 1000,
     )
     
     analysis_access = (
@@ -1689,10 +2105,32 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
         )
     )
 
+    stage_started_at = time.perf_counter()
 
     ingredients_map = await load_ingredients_map()
 
+    logger.info(
+        "[SCAN %s] ingredients_map %.0f ms (%s ingredients)",
+        scan_id,
+        (time.perf_counter() - stage_started_at) * 1000,
+        len(ingredients_map),
+    )
+
     cache_key = None
+    
+    formula_signature = []
+
+    if payload.ingredients_text:
+        formula_signature = build_formula_signature(
+            payload.ingredients_text,
+            ingredients_map,
+        )
+
+        logger.info(
+            "[SCAN %s] formula_signature %s",
+            scan_id,
+            formula_signature[:12],
+        )
 
     if payload.ingredients_text:
         cache_key = make_inci_hash(
@@ -1703,6 +2141,67 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
             {"cache_key": cache_key},
             {"_id": 0}
         )
+        if not cached and len(formula_signature) >= 5:
+            cache_candidates = (
+                await db.product_analysis_cache
+                .find(
+                    {
+                        "formula_signature": {
+                            "$exists": True
+                        }
+                    },
+                    {"_id": 0}
+                )
+                .limit(100)
+                .to_list(length=100)
+            )
+
+            best_candidate = None
+            best_similarity = 0.0
+            best_match_info = None
+
+            for candidate in cache_candidates:
+                candidate_signature = (
+                    candidate.get(
+                        "formula_signature",
+                        []
+                    )
+                )
+
+                match_info = formula_signature_match(
+                    formula_signature,
+                    candidate_signature,
+                )
+
+                similarity = match_info["similarity"]
+
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_candidate = candidate
+                    best_match_info = match_info
+
+            if best_match_info:
+                logger.info(
+                    "[SCAN %s] fuzzy_cache similarity=%.3f common=%s ratio=%.2f first_common=%s match=%s",
+                    scan_id,
+                    best_match_info["similarity"],
+                    best_match_info["common_count"],
+                    best_match_info["common_ratio"],
+                    best_match_info["first_common"],
+                    best_match_info["match"],
+                )
+            else:
+                logger.info(
+                    "[SCAN %s] fuzzy_cache no_candidate",
+                    scan_id,
+                )
+
+            if (
+                best_candidate
+                and best_match_info
+                and best_match_info["match"]
+            ):
+                cached = best_candidate
 
         if cached:
             cached_result = dict(cached["result"])
@@ -1943,132 +2442,79 @@ Format exact :
                     "data": img_b64
                 }
             })
-
+        gemini_started_at = time.perf_counter()
         gemini_response = genai_client.models.generate_content(
             model="gemini-2.5-flash",
             contents=contents
         )
+        logger.info(
+            "[SCAN %s] gemini %.0f ms",
+            scan_id,
+            (time.perf_counter() - gemini_started_at) * 1000,
+        )
 
         response = gemini_response.text
 
-    except Exception as e:
-        logger.exception("Gemini product analysis error")
-
-        raw_ingredients = payload.ingredients_text.split(",") if payload.ingredients_text else []
-
-        ingredient_analysis = analyze_ingredients_for_user(
-            raw_ingredients,
-            profile,
-            ingredients_map
+    except Exception:
+        logger.exception(
+            "[SCAN %s] Gemini product analysis error",
+            scan_id,
         )
 
-        formula_positioning = analyze_formula_positioning(
-            raw_ingredients,
-            ingredients_map
+        logger.info(
+            "[SCAN %s] local_fallback reason=gemini_error",
+            scan_id,
         )
-        formula_analysis = analyze_formula(
-            ingredient_names=raw_ingredients,
+
+        return await build_local_product_fallback(
+            payload=payload,
+            user=user,
             profile=profile,
-            ingredients_map=ingredients_map
+            ingredients_map=ingredients_map,
+            analysis_access=analysis_access,
+            reason="gemini_error",
         )
-        marketing_claims = get_marketing_claims(
-            payload.marketing_claims
-        )
-
-        marketing_analysis = (
-            analyze_marketing_claims(
-                ingredient_names=raw_ingredients,
-                ingredients_map=ingredients_map,
-                claims=marketing_claims
-            )
-            
-        )
-        synergy_analysis = analyze_synergies(
-            ingredient_names=raw_ingredients,
-            profile=profile,
-            ingredients_map=ingredients_map
-        )
-        
-        fallback_doc = {
-            "analysis_id": f"pa_{uuid.uuid4().hex[:12]}",
-            "user_id": user["user_id"],
-            "product_name": payload.name or "Produit analysé",
-            "product_category": "skincare",
-            "score": ingredient_analysis["ingredient_score"],
-            "ingredients": [],
-            "risks": [],
-            "compatibility": {
-                "verdict": "à surveiller",
-                "reasons": [
-                    "Analyse IA temporairement limitée, analyse ingrédients locale utilisée."
-                ]
-            },
-            "decision": {
-                "label": "Avec précaution",
-                "color": "orange",
-                "justification": "Analyse basée sur votre base ingrédients locale."
-            },
-            "alternatives": [],
-            "ingredient_analysis": ingredient_analysis,
-            "formula_positioning": formula_positioning,
-            "formula_analysis": formula_analysis,
-            "marketing_claims":
-                marketing_claims,
-
-            "marketing_analysis":
-                marketing_analysis,
-            "synergy_analysis":
-                synergy_analysis,
-            "recommended_products": [],
-            "from_fallback": True,
-            "created_at": now_utc(),
-            "created_at_day": now_utc().date().isoformat(),
-        }
-
-        await db.product_analyses.insert_one(fallback_doc)
-        fallback_doc.pop("_id", None)
-        await db.product_analysis_usage.insert_one({
-            "usage_id": f"usage_{uuid.uuid4().hex[:12]}",
-            "user_id": user["user_id"],
-            "created_at_day": now_utc().date().isoformat(),
-            "created_at": now_utc()
-        })
-        fallback_doc["access"] = {
-            "plan": analysis_access.get(
-                "plan",
-                "free",
-           ),
-            "limit": analysis_access.get(
-                "limit"
-           ),
-            "used_before_analysis": (
-                analysis_access.get("used", 0)
-           ),
-            "remaining_after_analysis": (
-                max(
-                    0,
-                    (
-                        analysis_access.get(
-                            "remaining",
-                            1,
-                        )
-                        or 1
-                    ) - 1,
-                )
-                if analysis_access.get(
-                    "remaining"
-                ) is not None
-                else None
-            ),
-        }
-        return fallback_doc
 
     try:
-        data = parse_json_from_text(response)
+        stage_started_at = time.perf_counter()
+
+        data = parse_json_with_repair(
+            response
+        )
+
+        logger.info(
+            "[SCAN %s] json_parse %.0f ms",
+            scan_id,
+            (time.perf_counter() - stage_started_at) * 1000,
+        )
     except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="Analyse temporairement indisponible. Réessayez dans quelques instants."
+        logger.exception(
+            "[SCAN %s] INVALID GEMINI JSON",
+            scan_id,
+        )
+
+        logger.warning(
+            "[SCAN %s] invalid_json_preview=%r",
+            scan_id,
+            (
+                response[:1000]
+                if response
+                else None
+            ),
+        )
+
+        logger.info(
+            "[SCAN %s] local_fallback reason=invalid_gemini_json",
+            scan_id,
+        )
+
+        return await build_local_product_fallback(
+            payload=payload,
+            user=user,
+            profile=profile,
+            ingredients_map=ingredients_map,
+            analysis_access=analysis_access,
+            reason="invalid_gemini_json",
         )
 
     extracted_text = (
@@ -2202,6 +2648,8 @@ Format exact :
     if not ingredient_source and extracted_text:
         ingredient_source = extracted_text.split(",")
 
+    intelligence_started_at = time.perf_counter()
+
     ingredient_analysis = analyze_ingredients_for_user(
         ingredient_source,
         profile,
@@ -2228,6 +2676,12 @@ Format exact :
         ingredient_names=ingredient_source,
         profile=profile,
         ingredients_map=ingredients_map
+    )
+
+    logger.info(
+        "[SCAN %s] oasis_engines %.0f ms",
+        scan_id,
+        (time.perf_counter() - intelligence_started_at) * 1000,
     )
 
     matched_ingredients = []
@@ -2303,6 +2757,8 @@ Format exact :
     if analyzed_category:
         query["category"] = analyzed_category
 
+    recommendations_started_at = time.perf_counter()
+
     cursor = db.products.find(query, {"_id": 0})
     products = await cursor.to_list(length=300)
 
@@ -2336,6 +2792,14 @@ Format exact :
     )
 
     data["recommended_products"] = recommended_products[:5]
+
+    logger.info(
+        "[SCAN %s] recommendations %.0f ms (%s candidates)",
+        scan_id,
+        (time.perf_counter() - recommendations_started_at) * 1000,
+        len(products),
+    )
+
     data["personalized_recommendation"] = (
         personalized_recommendation
     )
@@ -2409,6 +2873,11 @@ Format exact :
             "cache_key": cache_key,
             "ingredients_text":
                 extracted_text,
+            "formula_signature":
+                build_formula_signature(
+                    extracted_text,
+                    ingredients_map
+                ),
             "product_name":
                 analysis_doc.get(
                     "product_name"
@@ -2433,6 +2902,12 @@ Format exact :
     })
 
     analysis_doc.pop("_id", None)
+
+    logger.info(
+        "[SCAN %s] TOTAL %.0f ms",
+        scan_id,
+        (time.perf_counter() - scan_started_at) * 1000,
+    )
 
     return analysis_doc
 
@@ -2644,9 +3119,16 @@ async def pending_feedback(
             if existing:
                 continue
 
+            tracking_created_at = tracking["created_at"]
+
+            if tracking_created_at.tzinfo is None:
+                tracking_created_at = tracking_created_at.replace(
+                    tzinfo=timezone.utc
+                )
+
             days_used = (
                 now_utc() -
-                tracking["created_at"]
+                tracking_created_at
             ).days
 
             pending.append({

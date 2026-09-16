@@ -231,27 +231,32 @@ export const apiFetch = async (
       data = text;
     }
 
-    if (!res.ok) {
-      let msg = "Une erreur est survenue. Réessayez.";
+if (!res.ok) {
+  let msg =
+    data &&
+    typeof data === "object" &&
+    typeof data.detail === "string"
+      ? data.detail
+      : "Une erreur est survenue. Réessayez.";
 
-      if (data && typeof data === "object" && data.detail) {
-        msg = data.detail;
-      }
+  if (res.status === 401) {
+    msg = "Session expirée. Reconnecte-toi.";
+  }
 
-      if (res.status >= 500) {
-        msg = "Service temporairement indisponible. Réessayez dans quelques instants.";
-      }
+  if (
+    res.status >= 500 &&
+    !(
+      data &&
+      typeof data === "object" &&
+      typeof data.detail === "string"
+    )
+  ) {
+    msg =
+      "Service temporairement indisponible. Réessayez dans quelques instants.";
+  }
 
-      if (res.status === 401) {
-        msg = "Session expirée. Reconnecte-toi.";
-      }
-
-      if (res.status === 429) {
-        msg = "Limite atteinte. Réessayez plus tard.";
-      }
-
-      throw new Error(msg);
-    }
+  throw new Error(msg);
+}
 
     return data;
   } catch (e: any) {

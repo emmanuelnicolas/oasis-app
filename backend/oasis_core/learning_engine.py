@@ -20,24 +20,42 @@ async def compute_user_learnings(db, user_id: str) -> Dict[str, Any]:
     Orchestre les sous-moteurs de mémoire utilisateur.
     """
 
-    learning_summary = await compute_learning_summary(db, user_id)
-    ingredient_memory = await compute_ingredient_memory(db, user_id)
-    formula_memory = await compute_formula_memory(
-    db,
-    user_id,
-)
-    skin_memory = await compute_skin_memory(db, user_id)
-    routine_memory = await compute_routine_memory(
-    db,
-    user_id,
-    routine_skin_memory = (
-    await compute_routine_skin_memory(
+    learning_summary = await compute_learning_summary(
         db,
         user_id,
     )
-)
-)
-    patterns = await detect_user_patterns(db, user_id)
+
+    ingredient_memory = await compute_ingredient_memory(
+        db,
+        user_id,
+    )
+
+    formula_memory = await compute_formula_memory(
+        db,
+        user_id,
+    )
+
+    skin_memory = await compute_skin_memory(
+        db,
+        user_id,
+    )
+
+    routine_memory = await compute_routine_memory(
+        db,
+        user_id,
+    )
+
+    routine_skin_memory = await compute_routine_skin_memory(
+        db,
+        user_id,
+    )
+
+    routine_memory["skin_impact"] = routine_skin_memory
+
+    patterns = await detect_user_patterns(
+        db,
+        user_id,
+    )
 
     insights = await build_user_insights(
         learning_summary=learning_summary,
@@ -46,10 +64,8 @@ async def compute_user_learnings(db, user_id: str) -> Dict[str, Any]:
         routine_memory=routine_memory,
         skin_memory=skin_memory,
         patterns=patterns,
-)
-    routine_memory["skin_impact"] = (
-        routine_skin_memory
-)
+    )
+
     return {
         "learning_summary": learning_summary,
         "ingredient_intelligence": ingredient_memory,

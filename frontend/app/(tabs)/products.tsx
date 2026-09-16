@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Alert, TextInput, Platform, Modal, Image,
+  Alert, TextInput, Platform, Modal, Image, KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { recognizeText } from "expo-ocr-kit";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth, apiFetch } from "../../src/auth";
 import { colors, fonts, radius, spacing } from "../../src/theme";
@@ -73,6 +74,182 @@ const flagColor = (f: string) =>
 const flagBg = (f: string) =>
   f === "green" ? "rgba(126,154,136,0.12)" : f === "orange" ? "rgba(212,178,113,0.18)" : "rgba(184,107,107,0.15)";
 
+const isLikelyInciText = (text: string): boolean => {
+  const value = (text || "").trim();
+
+  if (!value) return false;
+
+  const upper = value.toUpperCase();
+
+  // Rejette les blocs qui ressemblent clairement à une adresse,
+  // un fabricant, un distributeur ou une URL.
+  const addressSignals = [
+    /\bMADE IN\b/i,
+    /\bDISTRIBUTED BY\b/i,
+    /\bDIST\.?\b/i,
+    /\bIMPORTED BY\b/i,
+    /\bIMPORT(E|É) PAR\b/i,
+    /\bMANUFACTURED BY\b/i,
+    /\bVICHY CANADA\b/i,
+    /\bNEW YORK\b/i,
+    /\bMONTR(E|É)AL\b/i,
+    /\bWWW\./i,
+    /\bHTTP(S)?:\/\//i,
+    /\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/i, // code postal canadien
+    /\b\d{5}(?:-\d{4})?\b/,          // ZIP / code postal 5 chiffres
+  ];
+
+  const addressHits = addressSignals.filter((pattern) =>
+    pattern.test(value)
+  ).length;
+
+  if (addressHits >= 2) {
+    return false;
+  }
+
+  const inciSignals = [
+    "AQUA",
+    "WATER",
+    "GLYCERIN",
+    "GLYCEROL",
+    "NIACINAMIDE",
+    "PANTHENOL",
+    "SQUALANE",
+    "SQUALENE",
+    "CERAMIDE",
+    "TOCOPHEROL",
+    "PARFUM",
+    "FRAGRANCE",
+    "ALCOHOL",
+    "GLYCOL",
+    "GLYCERYL",
+    "CETEARYL",
+    "CETYL",
+    "STEARYL",
+    "DIMETHICONE",
+    "SODIUM",
+    "POTASSIUM",
+    "ACID",
+    "EXTRACT",
+    "OIL",
+    "BUTTER",
+    "CAPRYL",
+    "CARBOMER",
+    "POLYGLYCERYL",
+    "PHENOXYETHANOL",
+    "ETHYLHEXYLGLYCERIN",
+  ];
+
+  const signalCount = inciSignals.filter((signal) =>
+    upper.includes(signal)
+  ).length;
+
+  const commaCount = (value.match(/,/g) || []).length;
+
+  // Une vraie liste INCI contient généralement plusieurs séparateurs
+  // et plusieurs termes cosmétiques reconnaissables.
+  return (
+    value.length >= 40 &&
+    commaCount >= 2 &&
+    signalCount >= 3
+  );
+};
+
+const extractInciFromOcr = (rawText: string): string => {
+  if (!rawText) return "";
+
+  const cleaned = rawText
+    .replace(/\r/g, "\n")
+    .replace(/[•·|]/g, ",")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (/^[\d\s/.\-]+$/.test(line)) {
+        return false;
+      }
+      return line.length >= 3;
+    });
+
+  if (!lines.length) return "";
+
+  const markerIndex = lines.findIndex((line) =>
+    /\b(ingredients?|inci)\b/i.test(line)
+  );
+
+  if (markerIndex !== -1) {
+    let inciLines = lines.slice(markerIndex);
+
+    inciLines[0] = inciLines[0]
+      .replace(/^.*?\b(ingredients?|inci)\b\s*:?\s*/i, "")
+      .trim();
+
+    const stopIndex = inciLines.findIndex(
+      (line, index) =>
+        index > 0 &&
+        /\b(directions?|how to use|warning|warnings|caution|made in|distributed by|www\.|barcode)\b/i.test(
+          line
+        )
+    );
+
+    if (stopIndex !== -1) {
+      inciLines = inciLines.slice(0, stopIndex);
+    }
+
+    const result = inciLines
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s*,\s*/g, ", ")
+      .replace(/\s*;\s*/g, ", ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    const commaCount = (result.match(/,/g) || []).length;
+
+    if (
+      result.length >= 40 &&
+      commaCount >= 2 &&
+      isLikelyInciText(result)
+    ) {
+      return result;
+    }
+  }
+
+  const candidateLines = lines.filter((line) => {
+    const commaCount = (line.match(/,/g) || []).length;
+    const semicolonCount = (line.match(/;/g) || []).length;
+
+    return commaCount + semicolonCount >= 2;
+  });
+
+  if (!candidateLines.length) {
+    return "";
+  }
+
+  const candidate = candidateLines
+    .join(" ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s*;\s*/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const commaCount = (candidate.match(/,/g) || []).length;
+
+  if (
+    candidate.length < 40 ||
+    commaCount < 2 ||
+    !isLikelyInciText(candidate)
+  ) {
+    return "";
+  }
+
+  return candidate;
+};
+
 export default function Products() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
@@ -91,6 +268,7 @@ export default function Products() {
   setMarketingClaimsText,
 ] = useState("");
   const [image, setImage] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [unreadable, setUnreadable] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -120,6 +298,7 @@ const resetComposer = () => {
   setInci("");
   setMarketingClaimsText("");
   setImage(null);
+  setImageUri(null);
   setUnreadable(null);
 };
 
@@ -132,13 +311,17 @@ const resetComposer = () => {
       }
     }
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       base64: true, quality: 0.6, allowsEditing: false,
     });
     if (!res.canceled && res.assets?.[0]?.base64) {
-      setImage(res.assets[0].base64);
-      setUnreadable(null);
-    }
+		const asset = res.assets[0];
+
+		setImage(asset.base64 ?? null);
+		setImageUri(asset.uri);
+		console.log("[OCR DEBUG] gallery uri:", asset.uri);
+		setUnreadable(null);
+	}
   };
 
   const openCamera = async () => {
@@ -159,58 +342,143 @@ const resetComposer = () => {
     }
 
     const res = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       base64: true,
       quality: 0.6,
       allowsEditing: false,
     });
 
     if (!res.canceled && res.assets?.[0]?.base64) {
-      setImage(res.assets[0].base64);
-      setUnreadable(null);
-    }
+		const asset = res.assets[0];
+
+		setImage(asset.base64 ?? null);
+		setImageUri(asset.uri);
+		console.log("[OCR DEBUG] camera uri:", asset.uri);
+		setUnreadable(null);
+	}
   } catch (error: any) {
     Alert.alert("Erreur caméra", error?.message || "Impossible d’ouvrir la caméra.");
   }
 };
 
-  const runAnalysis = async () => {
-    if (!image && !inci.trim()) {
-      Alert.alert("Info", "Ajoutez une photo ou collez la liste INCI.");
+const runAnalysis = async () => {
+  if (!image && !inci.trim()) {
+    Alert.alert(
+      "Info",
+      "Ajoutez une photo ou collez la liste INCI."
+    );
+    return;
+  }
+
+  setAnalyzing(true);
+  setUnreadable(null);
+
+  try {
+    let ingredientsText = inci.trim();
+
+    console.log("[OCR DEBUG] runAnalysis", {
+      imageUri,
+      hasImage: !!image,
+      hasInci: !!ingredientsText,
+      platform: Platform.OS,
+    });
+
+    // Si l'utilisateur n'a pas collé d'INCI,
+    // on tente de lire la photo localement avec l'OCR.
+    if (
+      !ingredientsText &&
+      imageUri &&
+      Platform.OS !== "web"
+    ) {
+      try {
+        const ocrStart = Date.now();
+
+        const ocrResult = await recognizeText(imageUri);
+
+        const rawOcrText = ocrResult.text?.trim() || "";
+
+        console.log(
+          `[OCR] ${Date.now() - ocrStart} ms - ${rawOcrText.length} caractères bruts`
+        );
+
+        console.log(
+          "[OCR] Texte brut:",
+          rawOcrText.slice(0, 500)
+        );
+
+        const extractedInci = extractInciFromOcr(rawOcrText);
+
+        if (extractedInci) {
+          ingredientsText = extractedInci;
+
+          console.log(
+            `[OCR] INCI détecté - ${extractedInci.length} caractères`
+          );
+
+          console.log(
+            "[OCR] INCI nettoyé:",
+            extractedInci.slice(0, 500)
+          );
+        } else {
+          ingredientsText = "";
+
+          console.log(
+            "[OCR] Aucun INCI suffisamment fiable détecté -> fallback Gemini"
+          );
+        }
+      } catch (ocrError) {
+        console.warn(
+          "[OCR] Échec OCR, fallback Gemini:",
+          ocrError
+        );
+
+        // Important :
+        // on ne bloque PAS l'analyse.
+        // Gemini recevra toujours la photo.
+      }
+    }
+
+    const marketingClaims = marketingClaimsText
+      .split(/\n|;/)
+      .map((claim) => claim.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const result = await apiFetch(
+      token,
+      "/products/analyze",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          image_base64: image || "",
+          ingredients_text: ingredientsText,
+          marketing_claims: marketingClaims,
+        }),
+      }
+    );
+
+    if (result && result.unreadable) {
+      setUnreadable(
+        result.message ||
+          "Liste illisible. Collez le texte INCI."
+      );
       return;
     }
-    setAnalyzing(true);
-    setUnreadable(null);
-    try {
-const marketingClaims =
-  marketingClaimsText
-    .split(/\n|;/)
-    .map((claim) => claim.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-      const result = await apiFetch(token, "/products/analyze", {
-        method: "POST",
-body: JSON.stringify({
-  name: name.trim(),
-  image_base64: image || "",
-  ingredients_text: inci.trim(),
-  marketing_claims: marketingClaims,
-}),
-      });
-      if (result && result.unreadable) {
-        setUnreadable(result.message || "Liste illisible. Collez le texte INCI.");
-        return;
-      }
-      setComposerOpen(false);
-      resetComposer();
-      setViewer(result);
-      load();
-    } catch (e: any) {
-      Alert.alert("Erreur", e.message || "Analyse impossible");
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+
+    setComposerOpen(false);
+    resetComposer();
+    setViewer(result);
+    load();
+  } catch (e: any) {
+    Alert.alert(
+      "Erreur",
+      e.message || "Analyse impossible"
+    );
+  } finally {
+    setAnalyzing(false);
+  }
+};
 
   const removeItem = async (id: string) => {
     try {
@@ -307,7 +575,11 @@ body: JSON.stringify({
 
       {/* Composer modal */}
       <Modal visible={composerOpen} animationType="slide" transparent onRequestClose={() => setComposerOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={0}
+        >
           <View style={[styles.modalCard, { paddingBottom: insets.bottom + spacing.md }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle analyse</Text>
@@ -316,7 +588,11 @@ body: JSON.stringify({
               </TouchableOpacity>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              contentContainerStyle={{ paddingBottom: spacing.xl }}
+            >
               <Text style={styles.label}>Nom du produit (optionnel)</Text>
               <TextInput
                 testID="product-name-input"
@@ -331,7 +607,13 @@ body: JSON.stringify({
               {image ? (
                 <View style={styles.imageRow}>
                   <Image source={{ uri: `data:image/jpeg;base64,${image}` }} style={styles.thumb} />
-                  <TouchableOpacity onPress={() => setImage(null)} testID="remove-image-btn">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setImage(null);
+                      setImageUri(null);
+                    }}
+                    testID="remove-image-btn"
+                  >
                     <Text style={styles.removeLink}>Retirer</Text>
                   </TouchableOpacity>
                 </View>
@@ -425,7 +707,7 @@ body: JSON.stringify({
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Result viewer modal */}
