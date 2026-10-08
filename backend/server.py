@@ -19,6 +19,8 @@ import time
 import base64
 import boto3
 from datetime import timedelta
+from io import BytesIO
+from PIL import Image, ImageOps
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -104,7 +106,45 @@ def _decode_base64_image(image_base64: str) -> bytes:
         raw = raw.split(",", 1)[1]
 
     return base64.b64decode(raw)
+def optimize_journal_photo(
+    image_bytes: bytes,
+    max_dimension: int = 1280,
+    quality: int = 78,
+) -> bytes:
+    with Image.open(BytesIO(image_bytes)) as image:
+        image = ImageOps.exif_transpose(image)
 
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        elif image.mode == "L":
+            image = image.convert("RGB")
+
+        width, height = image.size
+
+        if max(width, height) > max_dimension:
+            ratio = max_dimension / max(width, height)
+
+            new_size = (
+                max(1, int(width * ratio)),
+                max(1, int(height * ratio)),
+            )
+
+            image = image.resize(
+                new_size,
+                Image.Resampling.LANCZOS,
+            )
+
+        output = BytesIO()
+
+        image.save(
+            output,
+            format="JPEG",
+            quality=quality,
+            optimize=True,
+            progressive=True,
+        )
+
+        return output.getvalue()
 
 def upload_journal_photo(
     *,
@@ -117,7 +157,11 @@ def upload_journal_photo(
 
     image_bytes = _decode_base64_image(
         image_base64
-    )
+)
+
+    image_bytes = optimize_journal_photo(
+        image_bytes
+)
 
     image_key = (
         f"users/{user_id}/journal/"
