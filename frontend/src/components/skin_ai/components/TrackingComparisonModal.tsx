@@ -74,8 +74,15 @@ const METRICS: MetricDefinition[] = [
 ];
 
 function getImageUri(
-  imageBase64?: string
+  entry: JournalEntry
 ) {
+  if (entry.image_url) {
+    return entry.image_url;
+  }
+
+  const imageBase64 =
+    entry.image_base64;
+
   if (!imageBase64) return null;
 
   if (imageBase64.startsWith("data:")) {
@@ -118,8 +125,8 @@ function getMetricEvolution(
 
   return {
     label: isImprovement
-      ? "Amélioration"
-      : "À surveiller",
+      ? "AmÃ©lioration"
+      : "Ã€ surveiller",
     value:
       difference > 0
         ? `+${difference}`
@@ -148,7 +155,7 @@ function ProductList({
 
       {products.length === 0 ? (
         <Text style={styles.emptyProductText}>
-          Aucun produit associé.
+          Aucun produit associÃ©.
         </Text>
       ) : (
         products.map((product, index) => (
@@ -202,11 +209,11 @@ export function TrackingComparisonModal({
   }
 
   const firstImageUri = getImageUri(
-    firstEntry.image_base64
+    firstEntry
   );
 
   const secondImageUri = getImageUri(
-    secondEntry.image_base64
+    secondEntry
   );
 
   const firstProducts =
@@ -226,7 +233,7 @@ export function TrackingComparisonModal({
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>
-              ÉVOLUTION DE LA PEAU
+              Ã‰VOLUTION DE LA PEAU
             </Text>
 
             <Text style={styles.title}>
@@ -330,7 +337,7 @@ export function TrackingComparisonModal({
               )}
 
               <Text style={styles.photoLabel}>
-                Après
+                AprÃ¨s
               </Text>
 
               <Text style={styles.photoDate}>
@@ -343,7 +350,7 @@ export function TrackingComparisonModal({
 
           <View style={styles.metricsCard}>
             <Text style={styles.sectionTitle}>
-              Évolution des indicateurs
+              Ã‰volution des indicateurs
             </Text>
 
             {METRICS.map((metric) => {
@@ -377,7 +384,7 @@ export function TrackingComparisonModal({
                     <Text
                       style={styles.metricValues}
                     >
-                      {firstValue}/10 →{" "}
+                      {firstValue}/10 â†’{" "}
                       {secondValue}/10
                     </Text>
                   </View>
@@ -465,7 +472,7 @@ export function TrackingComparisonModal({
 
           <View style={styles.productsCard}>
             <Text style={styles.sectionTitle}>
-              Produits utilisés
+              Produits utilisÃ©s
             </Text>
 
             <ProductList
@@ -478,7 +485,7 @@ export function TrackingComparisonModal({
             />
 
             <ProductList
-              title="Après"
+              title="AprÃ¨s"
               products={secondProducts}
             />
           </View>

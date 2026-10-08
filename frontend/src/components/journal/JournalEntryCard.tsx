@@ -1,5 +1,4 @@
 import React from "react";
-
 import {
   View,
   Text,
@@ -7,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
-
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -20,19 +18,29 @@ import type {
   JournalEntry,
 } from "../../types/journal";
 
-
 type Props = {
   entry: JournalEntry;
   onDelete: (id: string) => void;
-
   selected?: boolean;
   selectionEnabled?: boolean;
-
-  onSelect?: (
-    entry: JournalEntry
-  ) => void;
+  onSelect?: (entry: JournalEntry) => void;
 };
 
+function getImageUri(entry: JournalEntry) {
+  if (entry.image_url) {
+    return entry.image_url;
+  }
+
+  const imageBase64 = entry.image_base64;
+
+  if (!imageBase64) return null;
+
+  if (imageBase64.startsWith("data:")) {
+    return imageBase64;
+  }
+
+  return `data:image/jpeg;base64,${imageBase64}`;
+}
 
 export function JournalEntryCard({
   entry,
@@ -42,60 +50,51 @@ export function JournalEntryCard({
   onSelect,
 }: Props) {
   const handlePress = () => {
-    if (
-      selectionEnabled &&
-      onSelect
-    ) {
+    if (selectionEnabled && onSelect) {
       onSelect(entry);
     }
   };
 
+  const imageUri = getImageUri(entry);
+
   return (
     <TouchableOpacity
-      activeOpacity={
-        selectionEnabled
-          ? 0.8
-          : 1
-      }
+      activeOpacity={selectionEnabled ? 0.8 : 1}
       onPress={handlePress}
       disabled={!selectionEnabled}
       style={[
         styles.entryCard,
-        selected &&
-          styles.entryCardSelected,
+        selected && styles.entryCardSelected,
       ]}
       testID={`entry-${entry.tracking_id}`}
     >
       <View style={styles.imageContainer}>
-        <Image
-          source={{
-            uri:
-              `data:image/jpeg;base64,` +
-              entry.image_base64,
-          }}
-          style={styles.entryImage}
-        />
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.entryImage}
+          />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Ionicons
+              name="image-outline"
+              size={26}
+              color={colors.textDisabled}
+            />
+          </View>
+        )}
 
         {selectionEnabled && (
           <View
             style={[
               styles.selectionBadge,
-              selected &&
-                styles.selectionBadgeSelected,
+              selected && styles.selectionBadgeSelected,
             ]}
           >
             <Ionicons
-              name={
-                selected
-                  ? "checkmark"
-                  : "add"
-              }
+              name={selected ? "checkmark" : "add"}
               size={15}
-              color={
-                selected
-                  ? "#FFFFFF"
-                  : colors.primary
-              }
+              color={selected ? "#FFFFFF" : colors.primary}
             />
           </View>
         )}
@@ -103,9 +102,7 @@ export function JournalEntryCard({
 
       <View style={styles.entryFooter}>
         <Text style={styles.entryDate}>
-          {new Date(
-            entry.created_at
-          ).toLocaleDateString(
+          {new Date(entry.created_at).toLocaleDateString(
             "fr-FR",
             {
               day: "numeric",
@@ -116,22 +113,13 @@ export function JournalEntryCard({
 
         {!selectionEnabled && (
           <TouchableOpacity
-            onPress={() =>
-              onDelete(
-                entry.tracking_id
-              )
-            }
-            testID={
-              `delete-` +
-              entry.tracking_id
-            }
+            onPress={() => onDelete(entry.tracking_id)}
+            testID={`delete-${entry.tracking_id}`}
           >
             <Ionicons
               name="trash-outline"
               size={16}
-              color={
-                colors.textDisabled
-              }
+              color={colors.textDisabled}
             />
           </TouchableOpacity>
         )}
@@ -182,7 +170,6 @@ export function JournalEntryCard({
   );
 }
 
-
 const styles = StyleSheet.create({
   entryCard: {
     width: "47%",
@@ -205,6 +192,14 @@ const styles = StyleSheet.create({
   entryImage: {
     width: "100%",
     height: 160,
+  },
+
+  imagePlaceholder: {
+    width: "100%",
+    height: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.border,
   },
 
   selectionBadge: {

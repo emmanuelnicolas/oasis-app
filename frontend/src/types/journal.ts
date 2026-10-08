@@ -7,6 +7,7 @@ export type LinkedProduct = {
 };export type JournalEntry = {
   tracking_id: string;
   image_base64?: string;
+  image_url?: string | null;
   note?: string;
   hydration: number;
   glow: number;

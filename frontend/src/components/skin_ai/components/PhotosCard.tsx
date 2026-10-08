@@ -37,9 +37,13 @@ type Props = {
   onAddTracking?: () => void;
 };
 
-function getImageUri(
-  imageBase64?: string | null
-) {
+function getImageUri(entry: JournalEntry) {
+  if (entry.image_url) {
+    return entry.image_url;
+  }
+
+  const imageBase64 = entry.image_base64;
+
   if (!imageBase64) return null;
 
   if (imageBase64.startsWith("data:")) {
@@ -68,7 +72,10 @@ export function PhotosCard({
 
   const photos = (entries || [])
     .filter((entry) =>
-      Boolean(entry.image_base64)
+      Boolean(
+        entry.image_url ||
+          entry.image_base64
+      )
     )
     .slice(0, 8);
 
@@ -220,13 +227,13 @@ export function PhotosCard({
             </Text>
 
             <Text
-  numberOfLines={1}
-  adjustsFontSizeToFit
-  minimumFontScale={0.88}
-  style={styles.title}
->
-  Vos photos récentes
-</Text>
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.88}
+              style={styles.title}
+            >
+              Vos photos récentes
+            </Text>
           </View>
         </View>
 
@@ -290,7 +297,8 @@ export function PhotosCard({
           onPress={onAddTracking}
           style={({ pressed }) => [
             styles.empty,
-            pressed && styles.emptyPressed,
+            pressed &&
+              styles.emptyPressed,
           ]}
         >
           <View style={styles.emptyIcon}>
@@ -307,8 +315,9 @@ export function PhotosCard({
             </Text>
 
             <Text style={styles.emptyText}>
-  Suivez visuellement l’évolution de votre peau.
-</Text>
+              Suivez visuellement
+              l’évolution de votre peau.
+            </Text>
           </View>
 
           <Ionicons
@@ -328,21 +337,24 @@ export function PhotosCard({
           }
         >
           {photos.map((entry) => {
-            const uri = getImageUri(
-              entry.image_base64
-            );
+            const uri =
+              getImageUri(entry);
 
             const selected =
               selectedTrackingIds.includes(
                 entry.tracking_id
               );
 
-            if (!uri) return null;
+            if (!uri) {
+              return null;
+            }
 
             return (
               <View
                 key={entry.tracking_id}
-                style={styles.photoWrapper}
+                style={
+                  styles.photoWrapper
+                }
               >
                 <Pressable
                   accessibilityRole="button"
@@ -352,9 +364,13 @@ export function PhotosCard({
                       : "Ouvrir ce suivi"
                   }
                   onPress={() =>
-                    handlePhotoPress(entry)
+                    handlePhotoPress(
+                      entry
+                    )
                   }
-                  style={({ pressed }) => [
+                  style={({
+                    pressed,
+                  }) => [
                     styles.imageContainer,
                     selected &&
                       styles.imageContainerSelected,
@@ -392,32 +408,34 @@ export function PhotosCard({
                         </Text>
                       )}
                     </View>
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Supprimer ce suivi"
-                      onPress={(event) => {
-                        event.stopPropagation();
-
-                        confirmDelete(
-                          entry.tracking_id
-                        );
-                      }}
-                      hitSlop={8}
-                      style={({ pressed }) => [
-                        styles.deleteButton,
-                        pressed &&
-                          styles.deleteButtonPressed,
-                      ]}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={14}
-                        color="#FFFFFF"
-                      />
-                    </Pressable>
-                  )}
+                  ) : null}
                 </Pressable>
+
+                {!comparisonMode ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Supprimer ce suivi"
+                    onPress={() =>
+                      confirmDelete(
+                        entry.tracking_id
+                      )
+                    }
+                    hitSlop={8}
+                    style={({
+                      pressed,
+                    }) => [
+                      styles.deleteButton,
+                      pressed &&
+                        styles.deleteButtonPressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={16}
+                      color="#FFFFFF"
+                    />
+                  </Pressable>
+                ) : null}
 
                 {entry.created_at ? (
                   <Text
@@ -455,7 +473,11 @@ export function PhotosCard({
               color={colors.textPrimary}
             />
 
-            <Text style={styles.addPhotoText}>
+            <Text
+              style={
+                styles.addPhotoText
+              }
+            >
               Ajouter
             </Text>
           </Pressable>
@@ -564,6 +586,7 @@ const styles = StyleSheet.create({
 
   photoWrapper: {
     width: 90,
+    position: "relative",
   },
 
   imageContainer: {
@@ -597,13 +620,15 @@ const styles = StyleSheet.create({
 
   deleteButton: {
     position: "absolute",
-    top: 6,
-    right: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    top: 5,
+    right: 5,
+    zIndex: 20,
+    elevation: 5,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor:
-      "rgba(50, 38, 33, 0.72)",
+      "rgba(50, 38, 33, 0.88)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -633,8 +658,10 @@ const styles = StyleSheet.create({
   },
 
   selectionBadgeSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor:
+      colors.primary,
+    borderColor:
+      colors.primary,
   },
 
   selectionNumber: {
@@ -697,7 +724,7 @@ const styles = StyleSheet.create({
 
   emptyContent: {
     flex: 1,
-	minWidth: 0,
+    minWidth: 0,
   },
 
   emptyTitle: {
@@ -708,9 +735,9 @@ const styles = StyleSheet.create({
   },
 
   emptyText: {
-  fontSize: 12,
-  lineHeight: 17,
-  color: colors.textSecondary,
-  flexShrink: 1,
-},
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+    flexShrink: 1,
+  },
 });

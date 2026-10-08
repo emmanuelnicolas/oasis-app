@@ -28,14 +28,30 @@ type Props = {
   onClose: () => void;
 };
 
-function getImageUri(imageBase64?: string) {
-  if (!imageBase64) return null;
+function getImageUri(
+  entry: JournalEntry
+) {
+  if (entry.image_url) {
+    return entry.image_url;
+  }
 
-  if (imageBase64.startsWith("data:")) {
+  const imageBase64 =
+    entry.image_base64;
+
+  if (!imageBase64) {
+    return null;
+  }
+
+  if (
+    imageBase64.startsWith("data:")
+  ) {
     return imageBase64;
   }
 
-  return `data:image/jpeg;base64,${imageBase64}`;
+  return (
+    `data:image/jpeg;base64,` +
+    imageBase64
+  );
 }
 
 const METRICS = [
@@ -80,12 +96,12 @@ export function TrackingDetailModal({
     return null;
   }
 
-  const imageUri = getImageUri(
-    entry.image_base64
-  );
+  const imageUri =
+    getImageUri(entry);
 
-  const linkedProducts: LinkedProduct[] =
-    entry.linked_products || [];
+  const linkedProducts:
+    LinkedProduct[] =
+      entry.linked_products || [];
 
   return (
     <Modal
@@ -132,8 +148,12 @@ export function TrackingDetailModal({
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={
+            styles.content
+          }
+          showsVerticalScrollIndicator={
+            false
+          }
         >
           {imageUri ? (
             <Image
@@ -149,14 +169,19 @@ export function TrackingDetailModal({
           >
             {new Date(
               entry.created_at
-            ).toLocaleDateString("fr-FR", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}
+            ).toLocaleDateString(
+              "fr-FR",
+              {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              }
+            )}
           </Text>
 
-          <View style={styles.metricsCard}>
+          <View
+            style={styles.metricsCard}
+          >
             <Text
               maxFontSizeMultiplier={1.15}
               style={styles.sectionTitle}
@@ -169,21 +194,23 @@ export function TrackingDetailModal({
                 entry[metric.key] || 0
               );
 
-              const progress = metric.reverse
-                ? Math.max(
-                    0,
-                    Math.min(
-                      100,
-                      100 - value * 10
+              const progress =
+                metric.reverse
+                  ? Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        100 -
+                          value * 10
+                      )
                     )
-                  )
-                : Math.max(
-                    0,
-                    Math.min(
-                      100,
-                      value * 10
-                    )
-                  );
+                  : Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        value * 10
+                      )
+                    );
 
               return (
                 <View
@@ -191,29 +218,42 @@ export function TrackingDetailModal({
                   style={styles.metric}
                 >
                   <View
-                    style={styles.metricHeader}
+                    style={
+                      styles.metricHeader
+                    }
                   >
                     <Text
-                      maxFontSizeMultiplier={1.15}
-                      style={styles.metricLabel}
+                      maxFontSizeMultiplier={
+                        1.15
+                      }
+                      style={
+                        styles.metricLabel
+                      }
                     >
                       {metric.label}
                     </Text>
 
                     <Text
-                      maxFontSizeMultiplier={1.1}
-                      style={styles.metricValue}
+                      maxFontSizeMultiplier={
+                        1.1
+                      }
+                      style={
+                        styles.metricValue
+                      }
                     >
                       {value}/10
                     </Text>
                   </View>
 
-                  <View style={styles.track}>
+                  <View
+                    style={styles.track}
+                  >
                     <View
                       style={[
                         styles.fill,
                         {
-                          width: `${progress}%`,
+                          width:
+                            `${progress}%`,
                         },
                       ]}
                     />
@@ -241,41 +281,61 @@ export function TrackingDetailModal({
           </View>
 
           {linkedProducts.length > 0 ? (
-            <View style={styles.productsCard}>
+            <View
+              style={styles.productsCard}
+            >
               <Text
-                maxFontSizeMultiplier={1.15}
-                style={styles.sectionTitle}
+                maxFontSizeMultiplier={
+                  1.15
+                }
+                style={
+                  styles.sectionTitle
+                }
               >
                 Produits utilisés
               </Text>
 
               {linkedProducts.map(
                 (
-                  product: LinkedProduct,
+                  product:
+                    LinkedProduct,
                   index: number
                 ) => (
                   <View
-                    key={product.analysis_id}
+                    key={
+                      product.analysis_id
+                    }
                     style={[
                       styles.productRow,
                       index ===
-                        linkedProducts.length - 1 &&
+                        linkedProducts.length -
+                          1 &&
                         styles.productRowLast,
                     ]}
                   >
                     <View
-                      style={styles.productText}
+                      style={
+                        styles.productText
+                      }
                     >
                       <Text
-                        maxFontSizeMultiplier={1.15}
-                        style={styles.productName}
+                        maxFontSizeMultiplier={
+                          1.15
+                        }
+                        style={
+                          styles.productName
+                        }
                       >
-                        {product.product_name}
+                        {
+                          product.product_name
+                        }
                       </Text>
 
                       {product.product_category ? (
                         <Text
-                          maxFontSizeMultiplier={1.1}
+                          maxFontSizeMultiplier={
+                            1.1
+                          }
                           style={
                             styles.productCategory
                           }
@@ -290,10 +350,15 @@ export function TrackingDetailModal({
                     {typeof product.score ===
                     "number" ? (
                       <Text
-                        maxFontSizeMultiplier={1.1}
-                        style={styles.productScore}
+                        maxFontSizeMultiplier={
+                          1.1
+                        }
+                        style={
+                          styles.productScore
+                        }
                       >
-                        {product.score}/100
+                        {product.score}
+                        /100
                       </Text>
                     ) : null}
                   </View>

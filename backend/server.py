@@ -16,6 +16,8 @@ import hashlib
 import secrets
 import resend
 import time
+import base64
+import boto3
 from datetime import timedelta
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
@@ -69,6 +71,113 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET_NAME = os.environ.get(
+    "R2_BUCKET_NAME",
+    "oasis-journal-photos"
+)
+R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "")
+
+r2_client = None
+
+if (
+    R2_ACCESS_KEY_ID
+    and R2_SECRET_ACCESS_KEY
+    and R2_ENDPOINT_URL
+):
+    r2_client = boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=R2_ACCESS_KEY_ID,
+        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+
+def _decode_base64_image(image_base64: str) -> bytes:
+    if not image_base64:
+        raise ValueError("Image Base64 vide")
+
+    raw = image_base64
+
+    if raw.startswith("data:"):
+        raw = raw.split(",", 1)[1]
+
+    return base64.b64decode(raw)
+
+
+def upload_journal_photo(
+    *,
+    user_id: str,
+    tracking_id: str,
+    image_base64: str,
+) -> str:
+    if not r2_client:
+        raise RuntimeError("R2 non configuré")
+
+    image_bytes = _decode_base64_image(
+        image_base64
+    )
+
+    image_key = (
+        f"users/{user_id}/journal/"
+        f"{tracking_id}.jpg"
+    )
+
+    r2_client.put_object(
+        Bucket=R2_BUCKET_NAME,
+        Key=image_key,
+        Body=image_bytes,
+        ContentType="image/jpeg",
+    )
+
+    return image_key
+
+
+def get_journal_photo_url(
+    image_key: str,
+    expires_in: int = 600,
+) -> str:
+    if not image_key:
+        return ""
+
+    if not r2_client:
+        return ""
+
+    return r2_client.generate_presigned_url(
+        ClientMethod="get_object",
+        Params={
+            "Bucket": R2_BUCKET_NAME,
+            "Key": image_key,
+        },
+        ExpiresIn=expires_in,
+    )
+
+
+def delete_journal_photo(image_key: str) -> None:
+    if not image_key:
+        print("R2 DELETE: image_key vide")
+        return
+
+    if not r2_client:
+        print("R2 DELETE: client R2 non configuré")
+        return
+
+    print("R2 DELETE KEY:", image_key)
+    print("R2 DELETE BUCKET:", R2_BUCKET_NAME)
+
+    response = r2_client.delete_object(
+        Bucket=R2_BUCKET_NAME,
+        Key=image_key,
+    )
+
+    print(
+        "R2 DELETE STATUS:",
+        response.get(
+            "ResponseMetadata",
+            {}
+        ).get("HTTPStatusCode")
+    )
 
 # ---------- Models ----------
 class SignupRequest(BaseModel):
@@ -3202,8 +3311,19 @@ async def add_skin_tracking(
                 "score": product.get("score")
             })
 
+    tracking_id = f"st_{uuid.uuid4().hex[:12]}"
+
+    image_key = ""
+
+    if payload.image_base64:
+        image_key = upload_journal_photo(
+            user_id=user["user_id"],
+            tracking_id=tracking_id,
+            image_base64=payload.image_base64,
+        )
+
     tracking = {
-        "tracking_id": f"st_{uuid.uuid4().hex[:12]}",
+        "tracking_id": tracking_id,
         "user_id": user["user_id"],
 
         "hydration": payload.hydration,
@@ -3214,7 +3334,12 @@ async def add_skin_tracking(
         "redness": payload.redness,
 
         "note": payload.note or "",
-        "image_base64": payload.image_base64 or "",
+
+        # Photo Storage V2
+        "image_key": image_key,
+
+        # Compatibilité temporaire avec l'ancien frontend
+        "image_base64": "",
 
         "created_at": now_utc(),
         "linked_products": linked_products,
@@ -3235,6 +3360,16 @@ async def get_skin_tracking(user=Depends(get_current_user)):
     ).sort("created_at", -1).limit(30)
 
     items = await cursor.to_list(length=30)
+
+    for item in items:
+        image_key = item.get("image_key")
+
+        if image_key:
+            item["image_url"] = get_journal_photo_url(
+                image_key
+            )
+        else:
+            item["image_url"] = ""
 
     return items
     
@@ -3257,13 +3392,38 @@ async def delete_skin_tracking(
     tracking_id: str,
     user=Depends(get_current_user)
 ):
+    tracking = await db.skin_tracking.find_one(
+        {
+            "tracking_id": tracking_id,
+            "user_id": user["user_id"],
+        },
+        {
+            "_id": 0,
+            "image_key": 1,
+        }
+    )
+
+    if not tracking:
+        raise HTTPException(
+            status_code=404,
+            detail="Suivi introuvable"
+        )
+
+    image_key = tracking.get("image_key")
+
+    if image_key:
+        delete_journal_photo(image_key)
+
     result = await db.skin_tracking.delete_one({
         "tracking_id": tracking_id,
         "user_id": user["user_id"]
     })
 
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Suivi introuvable")
+        raise HTTPException(
+            status_code=404,
+            detail="Suivi introuvable"
+        )
 
     return {"ok": True}
 # ---------- Daily Tracking ----------
