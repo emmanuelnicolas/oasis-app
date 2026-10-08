@@ -18,6 +18,8 @@ import resend
 import time
 import base64
 import boto3
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from datetime import timedelta
 from io import BytesIO
 from PIL import Image, ImageOps
@@ -95,7 +97,19 @@ if (
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         region_name="auto",
     )
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+APP_ENV = os.environ.get("APP_ENV", "development")
 
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            FastApiIntegration(),
+        ],
+        environment=APP_ENV,
+        send_default_pii=False,
+        traces_sample_rate=0.1,
+    )
 def _decode_base64_image(image_base64: str) -> bytes:
     if not image_base64:
         raise ValueError("Image Base64 vide")
@@ -222,7 +236,41 @@ def delete_journal_photo(image_key: str) -> None:
             {}
         ).get("HTTPStatusCode")
     )
+def delete_all_user_journal_photos(
+    user_id: str
+) -> None:
+    if not r2_client:
+        return
 
+    prefix = f"users/{user_id}/journal/"
+
+    while True:
+        response = r2_client.list_objects_v2(
+            Bucket=R2_BUCKET_NAME,
+            Prefix=prefix,
+            MaxKeys=1000,
+        )
+
+        objects = response.get(
+            "Contents",
+            []
+        )
+
+        if not objects:
+            break
+
+        r2_client.delete_objects(
+            Bucket=R2_BUCKET_NAME,
+            Delete={
+                "Objects": [
+                    {
+                        "Key": obj["Key"]
+                    }
+                    for obj in objects
+                ],
+                "Quiet": True,
+            },
+        )
 # ---------- Models ----------
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -451,6 +499,10 @@ async def login(payload: LoginRequest):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
     token = make_jwt(user_doc["user_id"])
     return AuthResponse(token=token, user=serialize_user(user_doc))
+    
+@api_router.get("/sentry-test")
+async def sentry_test():
+    raise RuntimeError("OASIS Sentry test error")
 
 
 @api_router.post("/auth/google/session", response_model=AuthResponse)
@@ -644,6 +696,102 @@ async def logout(authorization: Optional[str] = Header(None)):
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
     
+@api_router.delete("/account")
+async def delete_account(
+    user=Depends(get_current_user)
+):
+    user_id = user["user_id"]
+
+    try:
+        # 1. Supprimer toutes les photos R2
+        delete_all_user_journal_photos(
+            user_id
+        )
+
+        # 2. Données liées au suivi peau
+        await db.skin_tracking.delete_many({
+            "user_id": user_id
+        })
+
+        await db.skin_analyses.delete_many({
+            "user_id": user_id
+        })
+
+        await db.skin_analysis_usage.delete_many({
+            "user_id": user_id
+        })
+
+        # 3. Ancien journal Base64
+        await db.journal.delete_many({
+            "user_id": user_id
+        })
+
+        # 4. Routines et tracking quotidien
+        await db.routines.delete_many({
+            "user_id": user_id
+        })
+
+        await db.tracking.delete_many({
+            "user_id": user_id
+        })
+
+        # 5. Analyses produits
+        await db.product_analyses.delete_many({
+            "user_id": user_id
+        })
+
+        await db.product_analysis_usage.delete_many({
+            "user_id": user_id
+        })
+
+        await db.product_feedback.delete_many({
+            "user_id": user_id
+        })
+
+        # 6. Auth / sessions
+        await db.user_sessions.delete_many({
+            "user_id": user_id
+        })
+
+        await db.password_reset_tokens.delete_many({
+            "user_id": user_id
+        })
+
+        # 7. Supprimer le compte en dernier
+        result = await db.users.delete_one({
+            "user_id": user_id
+        })
+
+        if result.deleted_count == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="Compte introuvable"
+            )
+
+        return {
+            "success": True,
+            "message": (
+                "Compte et données supprimés."
+            ),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        logger.exception(
+            "Account deletion error "
+            "for user %s",
+            user_id,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Impossible de supprimer "
+                "le compte pour le moment."
+            ),
+        )    
 @api_router.post("/auth/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
     user = await db.users.find_one({
