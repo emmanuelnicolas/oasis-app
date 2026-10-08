@@ -500,10 +500,6 @@ async def login(payload: LoginRequest):
     token = make_jwt(user_doc["user_id"])
     return AuthResponse(token=token, user=serialize_user(user_doc))
     
-@api_router.get("/sentry-test")
-async def sentry_test():
-    raise RuntimeError("OASIS Sentry test error")
-
 
 @api_router.post("/auth/google/session", response_model=AuthResponse)
 async def google_session(payload: GoogleSessionRequest):
