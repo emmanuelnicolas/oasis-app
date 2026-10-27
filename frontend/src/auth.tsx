@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 
 export const API = process.env.EXPO_PUBLIC_BACKEND_URL || "https://oasis-backend-ia5h.onrender.com/api";
@@ -68,16 +69,66 @@ type AuthCtx = {
   loginWithGoogleSession: (sessionId: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
 const TOKEN_KEY = "skincare_token";
+GoogleSignin.configure({
+  webClientId:
+    "618039666720-kh4tlcikfek3j7qo4daafuqmva1m7i7h.apps.googleusercontent.com",
+  iosClientId:
+    "618039666720-0655lkmbu1ledj4a6r5etnd3jme6gbpn.apps.googleusercontent.com",
+});
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SkinUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const loginWithGoogle = async () => {
+  await GoogleSignin.hasPlayServices({
+    showPlayServicesUpdateDialog: true,
+  });
+
+  const result = await GoogleSignin.signIn();
+
+  if (result.type !== "success") {
+    throw new Error("Connexion Google annulée");
+  }
+
+  const idToken = result.data.idToken;
+
+  if (!idToken) {
+    throw new Error("Google n'a pas retourné de token d'identité");
+  }
+
+  const res = await fetch(`${API}/auth/google`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id_token: idToken,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data.detail || "Erreur de connexion Google"
+    );
+  }
+
+  await AsyncStorage.setItem(
+    TOKEN_KEY,
+    data.token
+  );
+
+  setToken(data.token);
+  setUser(data.user);
+};
 
   const fetchMe = useCallback(async (t: string) => {
   
@@ -191,7 +242,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, signup, login, loginWithGoogleSession, logout, refreshUser }}>
+    <AuthContext.Provider
+  value={{
+    user,
+    token,
+    loading,
+    signup,
+    login,
+    loginWithGoogle,
+    loginWithGoogleSession,
+    logout,
+    refreshUser,
+  }}
+>
       {children}
     </AuthContext.Provider>
   );

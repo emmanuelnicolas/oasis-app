@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta, date
 from google import genai
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from oasis_core.learning_engine import compute_user_learnings
 from oasis_core.formula_engine import analyze_formula
 from oasis_core.marketing_engine import analyze_marketing_claims
@@ -52,12 +54,38 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
-JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
+
+APP_ENV = os.environ.get("APP_ENV", "development")
+CORS_ORIGINS = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:8081,http://localhost:19006"
+)
+
+allowed_origins = [
+    origin.strip()
+    for origin in CORS_ORIGINS.split(",")
+    if origin.strip()
+]
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALG = "HS256"
+
+if APP_ENV == "production" and not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET must be configured in production"
+    )
+
+if not JWT_SECRET:
+    JWT_SECRET = "dev-secret"
 security = HTTPBearer()
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+GOOGLE_WEB_CLIENT_ID = os.environ.get(
+    "GOOGLE_WEB_CLIENT_ID",
+    "",
+)
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 APP_RESET_URL = os.environ.get(
@@ -67,7 +95,6 @@ APP_RESET_URL = os.environ.get(
 
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
-    print("RESEND CONFIGURED:", bool(RESEND_API_KEY))
     
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -98,7 +125,7 @@ if (
         region_name="auto",
     )
 SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
-APP_ENV = os.environ.get("APP_ENV", "development")
+
 
 if SENTRY_DSN:
     sentry_sdk.init(
@@ -120,6 +147,71 @@ def _decode_base64_image(image_base64: str) -> bytes:
         raw = raw.split(",", 1)[1]
 
     return base64.b64decode(raw)
+    
+def prepare_selfie_for_ai(
+    image_base64: str,
+    max_dimension: int = 1024,
+    quality: int = 80,
+) -> str:
+    image_bytes = _decode_base64_image(
+        image_base64
+    )
+
+    with Image.open(BytesIO(image_bytes)) as image:
+        image = ImageOps.exif_transpose(image)
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        width, height = image.size
+
+        if max(width, height) > max_dimension:
+            ratio = (
+                max_dimension
+                / max(width, height)
+            )
+
+            new_size = (
+                max(
+                    1,
+                    int(width * ratio),
+                ),
+                max(
+                    1,
+                    int(height * ratio),
+                ),
+            )
+
+            image = image.resize(
+                new_size,
+                Image.Resampling.LANCZOS,
+            )
+
+        output = BytesIO()
+
+        image.save(
+            output,
+            format="JPEG",
+            quality=quality,
+            optimize=True,
+            progressive=True,
+        )
+
+        optimized_bytes = output.getvalue()
+
+    return base64.b64encode(
+        optimized_bytes
+    ).decode("utf-8")
+def prepare_product_image_for_ai(
+    image_base64: str,
+) -> str:
+    return prepare_selfie_for_ai(
+        image_base64,
+        max_dimension=1800,
+        quality=85,
+    )
+
+
 def optimize_journal_photo(
     image_bytes: bytes,
     max_dimension: int = 1280,
@@ -214,28 +306,32 @@ def get_journal_photo_url(
 
 def delete_journal_photo(image_key: str) -> None:
     if not image_key:
-        print("R2 DELETE: image_key vide")
+        logger.warning(
+            "R2 journal photo delete skipped: missing image key"
+        )
         return
 
     if not r2_client:
-        print("R2 DELETE: client R2 non configuré")
+        logger.warning(
+            "R2 journal photo delete skipped: client not configured"
+        )
         return
 
-    print("R2 DELETE KEY:", image_key)
-    print("R2 DELETE BUCKET:", R2_BUCKET_NAME)
+    try:
+        r2_client.delete_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=image_key,
+        )
 
-    response = r2_client.delete_object(
-        Bucket=R2_BUCKET_NAME,
-        Key=image_key,
-    )
+        logger.info(
+            "R2 journal photo deleted successfully"
+        )
 
-    print(
-        "R2 DELETE STATUS:",
-        response.get(
-            "ResponseMetadata",
-            {}
-        ).get("HTTPStatusCode")
-    )
+    except Exception:
+        logger.exception(
+            "R2 journal photo deletion failed"
+        )
+        raise
 def delete_all_user_journal_photos(
     user_id: str
 ) -> None:
@@ -313,6 +409,9 @@ class SkinProfile(BaseModel):
 class GoogleSessionRequest(BaseModel):
     session_id: str
 
+class GoogleIdTokenRequest(BaseModel):
+    id_token: str
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -337,16 +436,6 @@ class Routine(BaseModel):
     steps: List[RoutineStep]
     created_at: datetime
 
-class JournalEntry(BaseModel):
-    entry_id: str
-    user_id: str
-    image_base64: str
-    note: str
-    created_at: datetime
-
-class JournalCreate(BaseModel):
-    image_base64: str
-    note: Optional[str] = ""
 
 class TrackingUpdate(BaseModel):
     routine_type: str  # matin, soir
@@ -500,6 +589,124 @@ async def login(payload: LoginRequest):
     token = make_jwt(user_doc["user_id"])
     return AuthResponse(token=token, user=serialize_user(user_doc))
     
+
+@api_router.post(
+    "/auth/google",
+    response_model=AuthResponse,
+)
+async def google_login(
+    payload: GoogleIdTokenRequest,
+):
+    if not GOOGLE_WEB_CLIENT_ID:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Login non configuré",
+        )
+
+    try:
+        google_user = google_id_token.verify_oauth2_token(
+            payload.id_token,
+            google_requests.Request(),
+            GOOGLE_WEB_CLIENT_ID,
+        )
+    except Exception:
+        logger.warning(
+            "Invalid Google ID token"
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Connexion Google invalide",
+        )
+
+    email = str(
+        google_user.get("email") or ""
+    ).lower().strip()
+
+    email_verified = bool(
+        google_user.get("email_verified")
+    )
+
+    google_subject = str(
+        google_user.get("sub") or ""
+    ).strip()
+
+    if (
+        not email
+        or not email_verified
+        or not google_subject
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Compte Google invalide",
+        )
+
+    existing = await db.users.find_one(
+        {"email": email},
+        {"_id": 0},
+    )
+
+    if existing:
+        user_id = existing["user_id"]
+
+        await db.users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "name": (
+                        google_user.get("name")
+                        or existing.get("name", "")
+                    ),
+                    "picture": (
+                        google_user.get("picture")
+                        or existing.get("picture")
+                    ),
+                    "google_sub": google_subject,
+                }
+            },
+        )
+
+        user_doc = await db.users.find_one(
+            {"user_id": user_id},
+            {
+                "_id": 0,
+                "password_hash": 0,
+            },
+        )
+
+    else:
+        user_id = (
+            f"user_{uuid.uuid4().hex[:12]}"
+        )
+
+        user_doc = {
+            "user_id": user_id,
+            "email": email,
+            "name": (
+                google_user.get("name")
+                or ""
+            ),
+            "picture": (
+                google_user.get("picture")
+            ),
+            "google_sub": google_subject,
+            "skin_profile": None,
+            "subscription": (
+                default_subscription()
+            ),
+            "created_at": now_utc(),
+        }
+
+        await db.users.insert_one(
+            dict(user_doc)
+        )
+
+    token = make_jwt(user_id)
+
+    return AuthResponse(
+        token=token,
+        user=serialize_user(user_doc),
+    )
+
 
 @api_router.post("/auth/google/session", response_model=AuthResponse)
 async def google_session(payload: GoogleSessionRequest):
@@ -777,8 +984,6 @@ async def delete_account(
     except Exception:
         logger.exception(
             "Account deletion error "
-            "for user %s",
-            user_id,
         )
 
         raise HTTPException(
@@ -803,7 +1008,9 @@ async def forgot_password(payload: ForgotPasswordRequest):
 
     reset_token = secrets.token_urlsafe(32)
     reset_link = f"{APP_RESET_URL}?token={reset_token}"
-    print("RESET LINK:", reset_link)
+    logger.info(
+    "Password reset link generated"
+)
 
     await db.password_reset_tokens.insert_one({
         "token": reset_token,
@@ -1229,10 +1436,22 @@ async def analyze_skin(
             detail="Analyse IA temporairement indisponible"
         )
 
-    img_b64 = payload.image_base64
+    try:
+        img_b64 = prepare_selfie_for_ai(
+            payload.image_base64
+        )
+    except Exception:
+        logger.exception(
+            "Selfie preprocessing error"
+        )
 
-    if img_b64.startswith("data:"):
-        img_b64 = img_b64.split(",", 1)[1]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Image invalide ou impossible "
+                "à traiter."
+            ),
+        )
 
     profile = user.get("skin_profile") or {}
 
@@ -2423,11 +2642,11 @@ async def analyze_product(payload: ProductAnalysisRequest, user=Depends(get_curr
             ingredients_map,
         )
 
-        logger.info(
-            "[SCAN %s] formula_signature %s",
-            scan_id,
-            formula_signature[:12],
-        )
+    logger.info(
+        "[SCAN %s] formula_signature generated (%s ingredients)",
+        scan_id,
+        len(formula_signature),
+    )
 
     if payload.ingredients_text:
         cache_key = make_inci_hash(
@@ -2728,15 +2947,29 @@ Format exact :
         contents = [prompt]
 
         if payload.image_base64:
-            img_b64 = payload.image_base64
+            try:
+                img_b64 = prepare_product_image_for_ai(
+                    payload.image_base64
+                )
+            except Exception:
+                logger.exception(
+                    "[SCAN %s] product image preprocessing error",
+                    scan_id,
+                )
 
-            if img_b64.startswith("data:"):
-                img_b64 = img_b64.split(",", 1)[1]
+                return await build_local_product_fallback(
+                    payload=payload,
+                    user=user,
+                    profile=profile,
+                    ingredients_map=ingredients_map,
+                    analysis_access=analysis_access,
+                    reason="image_preprocessing_error",
+                )
 
             contents.append({
                 "inline_data": {
                     "mime_type": "image/jpeg",
-                    "data": img_b64
+                    "data": img_b64,
                 }
             })
         gemini_started_at = time.perf_counter()
@@ -2791,13 +3024,8 @@ Format exact :
         )
 
         logger.warning(
-            "[SCAN %s] invalid_json_preview=%r",
+            "[SCAN %s] invalid Gemini JSON response",
             scan_id,
-            (
-                response[:1000]
-                if response
-                else None
-            ),
         )
 
         logger.info(
@@ -2817,9 +3045,8 @@ Format exact :
     extracted_text = (
         data.get("extracted_ingredients_text")
         or payload.ingredients_text
-        or ""
     )
-
+    
     if extracted_text:
         cache_key = make_inci_hash(
             normalize_inci_text(extracted_text)
@@ -3661,35 +3888,6 @@ async def tracking_stats(user=Depends(get_current_user)):
     return {"total_days": total_days, "streak": streak, "history": docs}
 
 
-# ---------- Journal ----------
-@api_router.post("/journal", response_model=JournalEntry)
-async def add_journal(payload: JournalCreate, user=Depends(get_current_user)):
-    entry = {
-        "entry_id": f"j_{uuid.uuid4().hex[:12]}",
-        "user_id": user["user_id"],
-        "image_base64": payload.image_base64,
-        "note": payload.note or "",
-        "created_at": now_utc(),
-    }
-    await db.journal.insert_one(dict(entry))
-    entry.pop("_id", None)
-    return JournalEntry(**entry)
-
-
-@api_router.get("/journal")
-async def list_journal(user=Depends(get_current_user)):
-    cursor = db.journal.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).limit(100)
-    entries = await cursor.to_list(length=100)
-    return entries
-
-
-@api_router.delete("/journal/{entry_id}")
-async def delete_journal(entry_id: str, user=Depends(get_current_user)):
-    res = await db.journal.delete_one({"entry_id": entry_id, "user_id": user["user_id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Entrée introuvable")
-    return {"ok": True}
-
 
 # ---------- Seasonal Tips ----------
 SEASONAL_TIPS = {
@@ -3746,34 +3944,18 @@ async def health_check():
 # ---------- Startup: seed demo user ----------
 @app.on_event("startup")
 async def startup_event():
-    demo_email = "demo@skincare.app"
+    await db.user_sessions.create_index(
+        "expires_at",
+        expireAfterSeconds=0,
+        name="ttl_user_sessions_expires_at",
+    )
 
-    existing = await db.users.find_one({
-        "email": demo_email
-    })
+    await db.password_reset_tokens.create_index(
+        "expires_at",
+        expireAfterSeconds=0,
+        name="ttl_password_reset_tokens_expires_at",
+    )
 
-    if not existing:
-        await db.users.insert_one({
-            "user_id": (
-                f"user_{uuid.uuid4().hex[:12]}"
-            ),
-            "email": demo_email,
-            "name": "Sophie Demo",
-            "password_hash": hash_password(
-                "Demo1234!"
-            ),
-            "picture": None,
-            "skin_profile": None,
-            "subscription": (
-                default_subscription()
-            ),
-            "created_at": now_utc(),
-        })
-
-        logger.info(
-            "Demo user seeded: "
-            "demo@skincare.app / Demo1234!"
-        )
 
 
 @app.on_event("shutdown")
@@ -3785,7 +3967,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

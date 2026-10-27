@@ -228,6 +228,11 @@ const actualSelfieAnalysisLimit =
     setTestingNotification,
   ] = useState(false);
 
+  const [
+    deletingAccount,
+    setDeletingAccount,
+  ] = useState(false);
+
 
   const load = useCallback(async () => {
     try {
@@ -399,6 +404,73 @@ const actualSelfieAnalysisLimit =
   const handleLogout = async () => {
     await logout();
     router.replace("/");
+  };
+
+
+  const handleDeleteAccount = () => {
+    if (deletingAccount) {
+      return;
+    }
+
+    Alert.alert(
+      "Supprimer mon compte",
+      "Cette action supprimera définitivement votre compte, vos analyses, votre historique, vos routines et vos photos OASIS. Cette action est irréversible.",
+      [
+        {
+          text: "Annuler",
+          style: "cancel",
+        },
+        {
+          text: "Continuer",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Confirmation définitive",
+              "Voulez-vous vraiment supprimer définitivement votre compte OASIS ?",
+              [
+                {
+                  text: "Annuler",
+                  style: "cancel",
+                },
+                {
+                  text: "Supprimer définitivement",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeletingAccount(true);
+
+                    try {
+                      await apiFetch(
+                        token,
+                        "/account",
+                        {
+                          method: "DELETE",
+                        }
+                      );
+
+                      await logout();
+                      router.replace("/");
+                    } catch (error: any) {
+                      console.warn(
+                        "Suppression du compte impossible",
+                        error
+                      );
+
+                      Alert.alert(
+                        "Erreur",
+                        error?.message ||
+                          "Impossible de supprimer votre compte pour le moment."
+                      );
+                    } finally {
+                      setDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
 
@@ -903,6 +975,38 @@ const actualSelfieAnalysisLimit =
           Se déconnecter
         </Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        testID="delete-account-btn"
+        style={[
+          styles.deleteAccountBtn,
+          deletingAccount &&
+            styles.disabledButton,
+        ]}
+        onPress={handleDeleteAccount}
+        disabled={deletingAccount}
+      >
+        {deletingAccount ? (
+          <ActivityIndicator
+            color={colors.error}
+            size="small"
+          />
+        ) : (
+          <>
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color={colors.error}
+            />
+
+            <Text
+              style={styles.deleteAccountText}
+            >
+              Supprimer mon compte
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -1385,6 +1489,25 @@ const styles = StyleSheet.create({
   logoutText: {
     color: colors.error,
     fontSize: 15,
+    fontWeight: "500",
+  },
+
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: radius.button,
+  },
+
+  deleteAccountText: {
+    color: colors.error,
+    fontSize: 14,
     fontWeight: "500",
   },
 premiumCard: {

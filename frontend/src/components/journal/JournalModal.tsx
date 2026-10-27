@@ -161,11 +161,23 @@ export function JournalModal({
   )}
 </TouchableOpacity>
 
+<View style={styles.privacyNotice}>
+  <Text style={styles.privacyNoticeTitle}>
+    Confidentialité
+  </Text>
+
+  <Text style={styles.privacyNoticeText}>
+    Votre photo est transmise à notre fournisseur IA uniquement pour réaliser
+    l’analyse. OASIS ne conserve pas la photo après traitement ; seul le
+    résultat de l’analyse est enregistré.
+  </Text>
+</View>
+
 <TouchableOpacity
-  testID="save-entry-btn"
-  style={styles.primaryBtn}
-  onPress={onSave}
-  disabled={saving}
+  testID="analyze-btn"
+  style={styles.secondaryBtn}
+  onPress={onAnalyze}
+  disabled={analyzing}
 >
   {saving ? (
     <ActivityIndicator color="#fff" />
@@ -274,6 +286,28 @@ primaryBtnText: {
   color: "#fff",
   fontWeight: "500",
   fontSize: 15,
+},
+
+privacyNotice: {
+  backgroundColor: "#F7F5F1",
+  borderRadius: 12,
+  padding: 14,
+  marginBottom: 14,
+  borderWidth: 1,
+  borderColor: "#E8E2D9",
+},
+
+privacyNoticeTitle: {
+  fontSize: 13,
+  fontWeight: "600",
+  color: colors.textPrimary,
+  marginBottom: 4,
+},
+
+privacyNoticeText: {
+  fontSize: 12,
+  lineHeight: 18,
+  color: colors.textSecondary,
 },
 secondaryBtn: {
   borderWidth: 1,

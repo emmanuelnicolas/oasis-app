@@ -19,7 +19,13 @@ import { colors, fonts, radius, spacing } from "../src/theme";
 
 export default function Index() {
   const router = useRouter();
-  const { user, loading, login, signup } = useAuth();
+  const {
+  user,
+  loading,
+  login,
+  signup,
+  loginWithGoogle,
+} = useAuth();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -52,15 +58,37 @@ export default function Index() {
     }
   };
 
-  const handleGoogle = () => {
-    if (Platform.OS !== "web" || typeof window === "undefined") {
-      Alert.alert("Google Login", "Veuillez ouvrir l'app dans le navigateur web pour utiliser Google.");
+  const handleGoogle = async () => {
+  setError(null);
+  setBusy(true);
+
+  try {
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined"
+    ) {
+      const redirectUrl =
+        window.location.origin + "/";
+
+      window.location.href =
+        `https://auth.emergentagent.com/?redirect=${encodeURIComponent(
+          redirectUrl
+        )}`;
+
       return;
     }
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + "/";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-  };
+
+    await loginWithGoogle();
+  } catch (e: any) {
+    setError(
+      e?.message ||
+        "Impossible de se connecter avec Google"
+    );
+  } finally {
+    setBusy(false);
+  }
+};
+
 
   const useDemoCredentials = () => {
     setMode("login");
