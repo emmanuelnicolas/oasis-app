@@ -1,23 +1,17 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
-
-export const API = process.env.EXPO_PUBLIC_BACKEND_URL || "https://oasis-backend-ia5h.onrender.com/api";
+export const API =
+  process.env.EXPO_PUBLIC_BACKEND_URL ||
+  "https://oasis-backend-ia5h.onrender.com/api";
 
 export type Subscription = {
   plan: "free" | "premium" | "founder";
-  status:
-    | "active"
-    | "trialing"
-    | "expired"
-    | "canceled";
-
+  status: "active" | "trialing" | "expired" | "canceled";
   started_at?: string | null;
   expires_at?: string | null;
   trial_ends_at?: string | null;
-
   provider?: string | null;
   provider_customer_id?: string | null;
   provider_subscription_id?: string | null;
@@ -27,7 +21,6 @@ export type AccessSummary = {
   subscription: Subscription;
   plan: "free" | "premium" | "founder";
   is_premium: boolean;
-
   limits: {
     product_analyses_per_day?: number | null;
     selfie_analyses_per_month?: number | null;
@@ -35,7 +28,6 @@ export type AccessSummary = {
     journal_history_days?: number | null;
     photo_comparisons_per_month?: number | null;
   };
-
   features: {
     advanced_formula?: boolean;
     marketing_analysis?: boolean;
@@ -55,7 +47,6 @@ export type SkinUser = {
   name: string;
   picture?: string | null;
   has_profile: boolean;
-
   subscription?: Subscription;
   access?: AccessSummary;
 };
@@ -66,15 +57,15 @@ type AuthCtx = {
   loading: boolean;
   signup: (email: string, password: string, name: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogleSession: (sessionId: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
 const TOKEN_KEY = "skincare_token";
+
 GoogleSignin.configure({
   webClientId:
     "618039666720-kh4tlcikfek3j7qo4daafuqmva1m7i7h.apps.googleusercontent.com",
@@ -86,58 +77,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<SkinUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
   const loginWithGoogle = async () => {
-  await GoogleSignin.hasPlayServices({
-    showPlayServicesUpdateDialog: true,
-  });
+    await GoogleSignin.hasPlayServices({
+      showPlayServicesUpdateDialog: true,
+    });
 
-  const result = await GoogleSignin.signIn();
+    const result = await GoogleSignin.signIn();
 
-  if (result.type !== "success") {
-    throw new Error("Connexion Google annulée");
-  }
+    if (result.type !== "success") {
+      throw new Error("Connexion Google annulée");
+    }
 
-  const idToken = result.data.idToken;
+    const idToken = result.data.idToken;
 
-  if (!idToken) {
-    throw new Error("Google n'a pas retourné de token d'identité");
-  }
+    if (!idToken) {
+      throw new Error("Google n'a pas retourné de token d'identité");
+    }
 
-  const res = await fetch(`${API}/auth/google`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id_token: idToken,
-    }),
-  });
+    const res = await fetch(`${API}/auth/google`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_token: idToken,
+      }),
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    throw new Error(
-      data.detail || "Erreur de connexion Google"
-    );
-  }
+    if (!res.ok) {
+      throw new Error(data.detail || "Erreur de connexion Google");
+    }
 
-  await AsyncStorage.setItem(
-    TOKEN_KEY,
-    data.token
-  );
-
-  setToken(data.token);
-  setUser(data.user);
-};
+    await AsyncStorage.setItem(TOKEN_KEY, data.token);
+    setToken(data.token);
+    setUser(data.user);
+  };
 
   const fetchMe = useCallback(async (t: string) => {
-  
-
-  const res = await fetch(`${API}/auth/me`, {
-    headers: { Authorization: `Bearer ${t}` },
-  });
+    const res = await fetch(`${API}/auth/me`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
 
     if (!res.ok) throw new Error("auth_failed");
+
     const u = await res.json();
     setUser(u);
     return u;
@@ -146,29 +131,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     (async () => {
       try {
-        // Check URL for Google session_id (web only)
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          const hash = window.location.hash || "";
-          const m = hash.match(/session_id=([^&]+)/);
-          if (m) {
-            const sessionId = m[1];
-            window.history.replaceState({}, "", window.location.pathname);
-            const res = await fetch(`${API}/auth/google/session`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ session_id: sessionId }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              await AsyncStorage.setItem(TOKEN_KEY, data.token);
-              setToken(data.token);
-              setUser(data.user);
-              setLoading(false);
-              return;
-            }
-          }
-        }
         const stored = await AsyncStorage.getItem(TOKEN_KEY);
+
         if (stored) {
           try {
             await fetchMe(stored);
@@ -189,8 +153,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, name }),
     });
+
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Erreur inscription");
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Erreur inscription");
+    }
+
     await AsyncStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setUser(data.user);
@@ -202,59 +171,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Erreur connexion");
-    await AsyncStorage.setItem(TOKEN_KEY, data.token);
-    setToken(data.token);
-    setUser(data.user);
-  };
 
-  const loginWithGoogleSession = async (sessionId: string) => {
-    const res = await fetch(`${API}/auth/google/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Erreur Google");
+
+    if (!res.ok) {
+      throw new Error(data.detail || "Erreur connexion");
+    }
+
     await AsyncStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setUser(data.user);
   };
 
   const logout = async () => {
-	const currentToken = token;
+    const currentToken = token;
 
-  await AsyncStorage.removeItem(TOKEN_KEY);
-  setToken(null);
-  setUser(null);
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+    setUser(null);
 
-  if (currentToken) {
-    fetch(`${API}/auth/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${currentToken}` },
-    }).catch(() => {});
-  }
-};
+    if (currentToken) {
+      fetch(`${API}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+      }).catch(() => {});
+    }
+  };
 
   const refreshUser = async () => {
-    if (token) await fetchMe(token);
+    if (token) {
+      await fetchMe(token);
+    }
   };
 
   return (
     <AuthContext.Provider
-  value={{
-    user,
-    token,
-    loading,
-    signup,
-    login,
-    loginWithGoogle,
-    loginWithGoogleSession,
-    logout,
-    refreshUser,
-  }}
->
+      value={{
+        user,
+        token,
+        loading,
+        signup,
+        login,
+        loginWithGoogle,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -262,7 +224,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+
+  if (!ctx) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+
   return ctx;
 };
 
@@ -272,54 +238,54 @@ export const apiFetch = async (
   options: RequestInit = {}
 ) => {
   if (!token) {
-  return null;
-}
+    return null;
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (token) headers.Authorization = `Bearer ${token}`;
+  headers.Authorization = `Bearer ${token}`;
 
   try {
     const res = await fetch(`${API}${path}`, { ...options, headers });
-
     const text = await res.text();
 
     let data: any = null;
+
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
       data = text;
     }
 
-if (!res.ok) {
-  let msg =
-    data &&
-    typeof data === "object" &&
-    typeof data.detail === "string"
-      ? data.detail
-      : "Une erreur est survenue. Réessayez.";
+    if (!res.ok) {
+      let msg =
+        data &&
+        typeof data === "object" &&
+        typeof data.detail === "string"
+          ? data.detail
+          : "Une erreur est survenue. Réessayez.";
 
-  if (res.status === 401) {
-    msg = "Session expirée. Reconnecte-toi.";
-  }
+      if (res.status === 401) {
+        msg = "Session expirée. Reconnecte-toi.";
+      }
 
-  if (
-    res.status >= 500 &&
-    !(
-      data &&
-      typeof data === "object" &&
-      typeof data.detail === "string"
-    )
-  ) {
-    msg =
-      "Service temporairement indisponible. Réessayez dans quelques instants.";
-  }
+      if (
+        res.status >= 500 &&
+        !(
+          data &&
+          typeof data === "object" &&
+          typeof data.detail === "string"
+        )
+      ) {
+        msg =
+          "Service temporairement indisponible. Réessayez dans quelques instants.";
+      }
 
-  throw new Error(msg);
-}
+      throw new Error(msg);
+    }
 
     return data;
   } catch (e: any) {
@@ -327,6 +293,8 @@ if (!res.ok) {
       throw e;
     }
 
-    throw new Error("Connexion impossible. Vérifie ta connexion ou réessaie.");
+    throw new Error(
+      "Connexion impossible. Vérifie ta connexion ou réessaie."
+    );
   }
 };

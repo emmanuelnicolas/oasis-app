@@ -10,7 +10,6 @@ import {
   Platform,
   ActivityIndicator,
   Image,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -20,12 +19,13 @@ import { colors, fonts, radius, spacing } from "../src/theme";
 export default function Index() {
   const router = useRouter();
   const {
-  user,
-  loading,
-  login,
-  signup,
-  loginWithGoogle,
-} = useAuth();
+    user,
+    loading,
+    login,
+    signup,
+    loginWithGoogle,
+  } = useAuth();
+
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -44,9 +44,13 @@ export default function Index() {
   const handleSubmit = async () => {
     setError(null);
     setBusy(true);
+
     try {
       if (mode === "signup") {
-        if (!name.trim()) throw new Error("Veuillez entrer votre prénom");
+        if (!name.trim()) {
+          throw new Error("Veuillez entrer votre prénom");
+        }
+
         await signup(email.trim(), password, name.trim());
       } else {
         await login(email.trim(), password);
@@ -59,41 +63,25 @@ export default function Index() {
   };
 
   const handleGoogle = async () => {
-  setError(null);
-  setBusy(true);
+    setError(null);
+    setBusy(true);
 
-  try {
-    if (
-      Platform.OS === "web" &&
-      typeof window !== "undefined"
-    ) {
-      const redirectUrl =
-        window.location.origin + "/";
+    try {
+      if (Platform.OS === "web") {
+        throw new Error(
+          "La connexion Google est actuellement disponible sur l'application mobile."
+        );
+      }
 
-      window.location.href =
-        `https://auth.emergentagent.com/?redirect=${encodeURIComponent(
-          redirectUrl
-        )}`;
-
-      return;
+      await loginWithGoogle();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+          "Impossible de se connecter avec Google"
+      );
+    } finally {
+      setBusy(false);
     }
-
-    await loginWithGoogle();
-  } catch (e: any) {
-    setError(
-      e?.message ||
-        "Impossible de se connecter avec Google"
-    );
-  } finally {
-    setBusy(false);
-  }
-};
-
-
-  const useDemoCredentials = () => {
-    setMode("login");
-    setEmail("demo@skincare.app");
-    setPassword("Demo1234!");
   };
 
   if (loading) {
@@ -110,7 +98,13 @@ export default function Index() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingTop: insets.top + spacing.xl,
+            paddingBottom: insets.bottom + spacing.xl,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.heroContainer}>
@@ -120,15 +114,24 @@ export default function Index() {
             }}
             style={styles.hero}
           />
+
           <View style={styles.heroOverlay} />
+
           <View style={styles.heroText}>
             <Text style={styles.brand}>OASIS</Text>
-            <Text style={styles.tagline}>Votre rituel beauté, sur mesure.</Text>
+            <Text style={styles.tagline}>
+              Votre rituel beauté, sur mesure.
+            </Text>
           </View>
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.title}>{mode === "login" ? "Bienvenue" : "Créez votre compte"}</Text>
+          <Text style={styles.title}>
+            {mode === "login"
+              ? "Bienvenue"
+              : "Créez votre compte"}
+          </Text>
+
           <Text style={styles.subtitle}>
             {mode === "login"
               ? "Reprenez votre rituel de soin."
@@ -138,6 +141,7 @@ export default function Index() {
           {mode === "signup" && (
             <View style={styles.field}>
               <Text style={styles.label}>Prénom</Text>
+
               <TextInput
                 testID="name-input"
                 style={styles.input}
@@ -152,6 +156,7 @@ export default function Index() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Email</Text>
+
             <TextInput
               testID="email-input"
               style={styles.input}
@@ -166,6 +171,7 @@ export default function Index() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Mot de passe</Text>
+
             <TextInput
               testID="password-input"
               style={styles.input}
@@ -176,15 +182,29 @@ export default function Index() {
               secureTextEntry
             />
           </View>
-		{mode === "login" && (
-			<TouchableOpacity
-				onPress={() => router.push("/forgot-password")}
-				style={{ alignSelf: "flex-end", marginBottom: spacing.md }}
-			>
-				<Text style={styles.forgotText}>Mot de passe oublié ?</Text>
-				</TouchableOpacity>
-		)}
-          {error && <Text style={styles.error} testID="auth-error">{error}</Text>}
+
+          {mode === "login" && (
+            <TouchableOpacity
+              onPress={() => router.push("/forgot-password")}
+              style={{
+                alignSelf: "flex-end",
+                marginBottom: spacing.md,
+              }}
+            >
+              <Text style={styles.forgotText}>
+                Mot de passe oublié ?
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {error && (
+            <Text
+              style={styles.error}
+              testID="auth-error"
+            >
+              {error}
+            </Text>
+          )}
 
           <TouchableOpacity
             testID="submit-auth-btn"
@@ -196,7 +216,9 @@ export default function Index() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryBtnText}>
-                {mode === "login" ? "Se connecter" : "S'inscrire"}
+                {mode === "login"
+                  ? "Se connecter"
+                  : "S'inscrire"}
               </Text>
             )}
           </TouchableOpacity>
@@ -207,21 +229,34 @@ export default function Index() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity testID="google-btn" style={styles.googleBtn} onPress={handleGoogle}>
-            <Text style={styles.googleBtnText}>Continuer avec Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity testID="demo-btn" onPress={useDemoCredentials} style={{ marginTop: spacing.md }}>
-            <Text style={styles.demoText}>Essayer avec le compte de démo</Text>
+          <TouchableOpacity
+            testID="google-btn"
+            style={styles.googleBtn}
+            onPress={handleGoogle}
+            disabled={busy}
+          >
+            <Text style={styles.googleBtnText}>
+              Continuer avec Google
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             testID="toggle-mode-btn"
-            onPress={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
-            style={{ marginTop: spacing.lg, alignItems: "center" }}
+            onPress={() => {
+              setMode(
+                mode === "login" ? "signup" : "login"
+              );
+              setError(null);
+            }}
+            style={{
+              marginTop: spacing.lg,
+              alignItems: "center",
+            }}
           >
             <Text style={styles.toggleText}>
-              {mode === "login" ? "Pas encore de compte ? S'inscrire" : "Déjà inscrit·e ? Se connecter"}
+              {mode === "login"
+                ? "Pas encore de compte ? S'inscrire"
+                : "Déjà inscrit·e ? Se connecter"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -231,8 +266,15 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  scroll: { paddingHorizontal: spacing.lg },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bg,
+  },
+  scroll: {
+    paddingHorizontal: spacing.lg,
+  },
   heroContainer: {
     height: 280,
     borderRadius: radius.image,
@@ -240,15 +282,36 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     position: "relative",
   },
-  hero: { width: "100%", height: "100%" },
+  hero: {
+    width: "100%",
+    height: "100%",
+  },
   heroOverlay: {
     position: "absolute",
-    left: 0, right: 0, top: 0, bottom: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: "rgba(31,46,36,0.25)",
   },
-  heroText: { position: "absolute", left: spacing.lg, bottom: spacing.lg },
-  brand: { fontSize: 28, color: "#fff", letterSpacing: 6, fontWeight: "300", fontFamily: fonts.heading },
-  tagline: { fontSize: 16, color: "#fff", marginTop: spacing.xs, fontWeight: "300" },
+  heroText: {
+    position: "absolute",
+    left: spacing.lg,
+    bottom: spacing.lg,
+  },
+  brand: {
+    fontSize: 28,
+    color: "#fff",
+    letterSpacing: 6,
+    fontWeight: "300",
+    fontFamily: fonts.heading,
+  },
+  tagline: {
+    fontSize: 16,
+    color: "#fff",
+    marginTop: spacing.xs,
+    fontWeight: "300",
+  },
   formCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
@@ -256,9 +319,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  title: { fontSize: 30, color: colors.textPrimary, fontFamily: fonts.heading, fontWeight: "400", marginBottom: spacing.xs },
-  subtitle: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 22 },
-  field: { marginBottom: spacing.md },
+  title: {
+    fontSize: 30,
+    color: colors.textPrimary,
+    fontFamily: fonts.heading,
+    fontWeight: "400",
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  field: {
+    marginBottom: spacing.md,
+  },
   label: {
     fontSize: 11,
     color: colors.textSecondary,
@@ -283,10 +359,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: spacing.md,
   },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "500" },
-  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.lg },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { marginHorizontal: spacing.sm, color: colors.textSecondary, fontSize: 12 },
+  primaryBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    marginHorizontal: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
   googleBtn: {
     borderWidth: 1,
     borderColor: colors.primary,
@@ -294,14 +386,24 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  googleBtnText: { color: colors.primary, fontSize: 15, fontWeight: "500" },
-  toggleText: { color: colors.textSecondary, fontSize: 14 },
-  error: { color: colors.error, fontSize: 14, marginTop: spacing.xs, textAlign: "center" },
-  demoText: { color: colors.secondary, fontSize: 13, textAlign: "center", textDecorationLine: "underline" },
-  
+  googleBtnText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  toggleText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  error: {
+    color: colors.error,
+    fontSize: 14,
+    marginTop: spacing.xs,
+    textAlign: "center",
+  },
   forgotText: {
-  color: colors.primary,
-  fontSize: 13,
-  fontWeight: "500",
-},
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: "500",
+  },
 });

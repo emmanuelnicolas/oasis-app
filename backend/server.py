@@ -11,7 +11,6 @@ import re
 import uuid
 import bcrypt
 import jwt
-import httpx
 import hashlib
 import secrets
 import resend
@@ -43,7 +42,6 @@ from oasis_core.access_control import (
 )
 
 
-# from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -52,8 +50,6 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
-
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 APP_ENV = os.environ.get("APP_ENV", "development")
 CORS_ORIGINS = os.environ.get(
@@ -406,9 +402,6 @@ class SkinProfile(BaseModel):
     current_routine: Optional[str] = ""
     goals: Optional[str] = ""
 
-class GoogleSessionRequest(BaseModel):
-    session_id: str
-
 class GoogleIdTokenRequest(BaseModel):
     id_token: str
 
@@ -708,48 +701,6 @@ async def google_login(
     )
 
 
-@api_router.post("/auth/google/session", response_model=AuthResponse)
-async def google_session(payload: GoogleSessionRequest):
-    # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    async with httpx.AsyncClient(timeout=15.0) as http_client:
-        resp = await http_client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": payload.session_id},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Session Google invalide")
-    data = resp.json()
-    email = data["email"].lower()
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": data.get("name", existing.get("name", "")),
-                       "picture": data.get("picture")}},
-        )
-        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user_doc = {
-            "user_id": user_id,
-            "email": email,
-            "name": data.get("name", ""),
-            "picture": data.get("picture"),
-            "skin_profile": None,
-            "subscription": default_subscription(),
-            "created_at": now_utc(),
-        }
-        await db.users.insert_one(dict(user_doc))
-    # Save session
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": data["session_token"],
-        "expires_at": now_utc() + timedelta(days=7),
-        "created_at": now_utc(),
-    })
-    return AuthResponse(token=data["session_token"], user=serialize_user(user_doc))
-
 
 @api_router.get(
     "/auth/me",
@@ -893,12 +844,10 @@ async def get_access_usage(
     }
 
 @api_router.post("/auth/logout")
-async def logout(authorization: Optional[str] = Header(None)):
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-        await db.user_sessions.delete_one({"session_token": token})
+async def logout():
     return {"ok": True}
-    
+
+
 @api_router.delete("/account")
 async def delete_account(
     user=Depends(get_current_user)
@@ -952,6 +901,7 @@ async def delete_account(
         })
 
         # 6. Auth / sessions
+        # Nettoyage des anciennes sessions Emergent éventuellement encore présentes.
         await db.user_sessions.delete_many({
             "user_id": user_id
         })
@@ -3941,15 +3891,9 @@ async def health_check():
         "gemini_configured": bool(genai_client),
         "time": now_utc()
     }
-# ---------- Startup: seed demo user ----------
+# ---------- Startup ----------
 @app.on_event("startup")
 async def startup_event():
-    await db.user_sessions.create_index(
-        "expires_at",
-        expireAfterSeconds=0,
-        name="ttl_user_sessions_expires_at",
-    )
-
     await db.password_reset_tokens.create_index(
         "expires_at",
         expireAfterSeconds=0,
